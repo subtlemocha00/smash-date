@@ -1,0 +1,104 @@
+.page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header {
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navLink {
+  font-size: 0.875rem;
+  color: #555;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: #111;
+}
+
+.signOutBtn {
+  font-size: 0.875rem;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  color: #555;
+}
+
+.signOutBtn:hover {
+  background: #f5f5f5;
+}
+
+.main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #e5e5e5;
+}
+
+.groupName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.newBtn {
+  padding: 0.35rem 0.75rem;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.newBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.muted {
+  font-size: 0.875rem;
+  color: #888;
+}
