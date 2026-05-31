@@ -51,9 +51,13 @@ export function subscribeToGroupProposals(groupId, callback) {
   })
 }
 
-export function subscribeToProposal(proposalId, callback) {
-  return onSnapshot(doc(db, 'proposals', proposalId), (snap) => {
-    if (snap.exists()) callback({ id: snap.id, ...snap.data() })
-    else callback(null)
-  })
+export function subscribeToProposal(proposalId, callback, onError) {
+  return onSnapshot(
+    doc(db, 'proposals', proposalId),
+    (snap) => {
+      if (snap.exists()) callback({ id: snap.id, ...snap.data() })
+      else callback(null)
+    },
+    onError ?? (() => {})
+  )
 }

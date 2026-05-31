@@ -12,6 +12,10 @@ import {
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
+import {
+  createNotification,
+  createNotificationsForGroup
+} from '../services/firebase/notifications'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -63,30 +67,45 @@ export default function ProposalPage() {
   const [responsibilities, setResponsibilities] = useState([])
   const [activity, setActivity] = useState([])
   const [members, setMembers] = useState({})
+  const [memberIds, setMemberIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [listenerError, setListenerError] = useState('')
 
   const [editing, setEditing] = useState(false)
   const [editFields, setEditFields] = useState({})
   const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const [statusError, setStatusError] = useState('')
 
   const [commentText, setCommentText] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState('')
 
   const [respTitle, setRespTitle] = useState('')
   const [respAssignee, setRespAssignee] = useState('')
   const [respSubmitting, setRespSubmitting] = useState(false)
+  const [respError, setRespError] = useState('')
 
   useEffect(() => {
-    const unsub = subscribeToProposal(id, (p) => {
-      if (!p) {
-        setNotFound(true)
+    const unsub = subscribeToProposal(
+      id,
+      (p) => {
+        if (!p) {
+          setNotFound(true)
+          setLoading(false)
+          return
+        }
+        setProposal(p)
         setLoading(false)
-        return
+      },
+      () => {
+        setListenerError('Failed to load proposal.')
+        setLoading(false)
       }
-      setProposal(p)
-      setLoading(false)
-    })
+    )
     return unsub
   }, [id])
 
@@ -105,15 +124,20 @@ export default function ProposalPage() {
   useEffect(() => {
     if (!userProfile?.groupId) return
     async function loadMembers() {
-      const groupSnap = await getDoc(doc(db, 'groups', userProfile.groupId))
-      if (!groupSnap.exists()) return
-      const { memberIds } = groupSnap.data()
-      const snaps = await Promise.all(memberIds.map((uid) => getDoc(doc(db, 'users', uid))))
-      const map = {}
-      snaps.forEach((s) => {
-        if (s.exists()) map[s.id] = s.data().displayName || s.data().email
-      })
-      setMembers(map)
+      try {
+        const groupSnap = await getDoc(doc(db, 'groups', userProfile.groupId))
+        if (!groupSnap.exists()) return
+        const { memberIds: ids } = groupSnap.data()
+        setMemberIds(ids)
+        const snaps = await Promise.all(ids.map((uid) => getDoc(doc(db, 'users', uid))))
+        const map = {}
+        snaps.forEach((s) => {
+          if (s.exists()) map[s.id] = s.data().displayName || s.data().email
+        })
+        setMembers(map)
+      } catch {
+        // Members won't be available for assignment, but page still works
+      }
     }
     loadMembers()
   }, [userProfile?.groupId])
@@ -130,17 +154,21 @@ export default function ProposalPage() {
       budget: proposal.budget || '',
       notes: proposal.notes || ''
     })
+    setSaveSuccess(false)
+    setSaveError('')
     setEditing(true)
   }
 
   function cancelEditing() {
     setEditing(false)
     setEditFields({})
+    setSaveError('')
   }
 
   async function saveEditing() {
     if (!editFields.title.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
       await updateProposal(id, editFields)
       await logActivity(
@@ -148,15 +176,27 @@ export default function ProposalPage() {
         'fields_updated',
         `${userProfile.displayName || 'Someone'} updated the proposal details`
       )
+      if (memberIds.length > 0) {
+        await createNotificationsForGroup(
+          memberIds,
+          user.uid,
+          'proposal_updated',
+          `${userProfile.displayName || 'Someone'} updated the proposal: ${editFields.title.trim()}`,
+          id
+        )
+      }
       setEditing(false)
-    } catch (err) {
-      console.error(err)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch {
+      setSaveError('Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
   }
 
   async function changeStatus(newStatus) {
+    setStatusError('')
     try {
       await updateProposal(id, { status: newStatus })
       await logActivity(
@@ -164,8 +204,17 @@ export default function ProposalPage() {
         'status_changed',
         `${userProfile.displayName || 'Someone'} changed status to ${STATUS_LABELS[newStatus]}`
       )
-    } catch (err) {
-      console.error(err)
+      if (memberIds.length > 0) {
+        await createNotificationsForGroup(
+          memberIds,
+          user.uid,
+          'status_changed',
+          `${userProfile.displayName || 'Someone'} changed ${proposal?.title || 'a proposal'} to ${STATUS_LABELS[newStatus]}`,
+          id
+        )
+      }
+    } catch {
+      setStatusError('Failed to update status. Please try again.')
     }
   }
 
@@ -173,16 +222,26 @@ export default function ProposalPage() {
     e.preventDefault()
     if (!commentText.trim()) return
     setCommentSubmitting(true)
+    setCommentError('')
     try {
-      await addComment(
+      await addComment(id, user.uid, userProfile.displayName || user.email, commentText.trim())
+      await logActivity(
         id,
-        user.uid,
-        userProfile.displayName || user.email,
-        commentText.trim()
+        'comment_added',
+        `${userProfile.displayName || 'Someone'} added a comment`
       )
+      if (memberIds.length > 0) {
+        await createNotificationsForGroup(
+          memberIds,
+          user.uid,
+          'comment_added',
+          `${userProfile.displayName || 'Someone'} commented on: ${proposal?.title || 'a proposal'}`,
+          id
+        )
+      }
       setCommentText('')
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setCommentError('Failed to post comment. Please try again.')
     } finally {
       setCommentSubmitting(false)
     }
@@ -192,17 +251,27 @@ export default function ProposalPage() {
     e.preventDefault()
     if (!respTitle.trim() || !respAssignee) return
     setRespSubmitting(true)
+    setRespError('')
     try {
-      await addResponsibility(
+      const assigneeName = members[respAssignee] || respAssignee
+      await addResponsibility(id, respTitle.trim(), respAssignee, assigneeName)
+      await logActivity(
         id,
-        respTitle.trim(),
-        respAssignee,
-        members[respAssignee] || respAssignee
+        'responsibility_assigned',
+        `${userProfile.displayName || 'Someone'} assigned "${respTitle.trim()}" to ${assigneeName}`
       )
+      if (respAssignee !== user.uid) {
+        await createNotification(
+          respAssignee,
+          'responsibility_assigned',
+          `${userProfile.displayName || 'Someone'} assigned you "${respTitle.trim()}" on ${proposal?.title || 'a proposal'}`,
+          id
+        )
+      }
       setRespTitle('')
       setRespAssignee('')
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setRespError('Failed to add responsibility. Please try again.')
     } finally {
       setRespSubmitting(false)
     }
@@ -210,6 +279,17 @@ export default function ProposalPage() {
 
   if (loading) {
     return <div className={styles.loading}>Loading…</div>
+  }
+
+  if (listenerError) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.notFound}>
+          <p className={styles.errorMsg}>{listenerError}</p>
+          <Link to="/dashboard">Back to dashboard</Link>
+        </div>
+      </div>
+    )
   }
 
   if (notFound) {
@@ -257,6 +337,7 @@ export default function ProposalPage() {
               </span>
             </div>
             <div className={styles.editActions}>
+              {saveSuccess && <span className={styles.saveSuccess}>Saved</span>}
               {editing ? (
                 <>
                   <button
@@ -278,6 +359,8 @@ export default function ProposalPage() {
               )}
             </div>
           </div>
+
+          {saveError && <p className={styles.errorMsg}>{saveError}</p>}
 
           <div className={styles.fields}>
             {editing ? (
@@ -366,6 +449,7 @@ export default function ProposalPage() {
                 </button>
               ))}
             </div>
+            {statusError && <p className={styles.errorMsg}>{statusError}</p>}
           </section>
         )}
 
@@ -373,7 +457,7 @@ export default function ProposalPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Responsibilities</h2>
           {responsibilities.length === 0 ? (
-            <p className={styles.muted}>No responsibilities yet.</p>
+            <p className={styles.emptyState}>No responsibilities assigned.</p>
           ) : (
             <ul className={styles.respList}>
               {responsibilities.map((r) => (
@@ -429,13 +513,14 @@ export default function ProposalPage() {
               Add
             </button>
           </form>
+          {respError && <p className={styles.errorMsg}>{respError}</p>}
         </section>
 
         {/* Activity feed */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Activity</h2>
           {activity.length === 0 ? (
-            <p className={styles.muted}>No activity yet.</p>
+            <p className={styles.emptyState}>No activity yet.</p>
           ) : (
             <ul className={styles.activityList}>
               {activity.map((e) => (
@@ -452,7 +537,7 @@ export default function ProposalPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Comments</h2>
           {comments.length === 0 ? (
-            <p className={styles.muted}>No comments yet.</p>
+            <p className={styles.emptyState}>No comments yet.</p>
           ) : (
             <ul className={styles.commentList}>
               {comments.map((c) => (
@@ -481,6 +566,7 @@ export default function ProposalPage() {
               Post
             </button>
           </form>
+          {commentError && <p className={styles.errorMsg}>{commentError}</p>}
         </section>
       </main>
     </div>

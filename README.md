@@ -41,9 +41,9 @@ src/
     AuthContext.jsx              # Auth state, user profile, exposes useAuth()
   pages/
     LoginPage.jsx / .module.css          # Email/password + Google sign-in and register
-    DashboardPage.jsx / .module.css      # Group info + proposal list
+    DashboardPage.jsx / .module.css      # Group info, pending actions, notifications, proposals
     GroupSetupPage.jsx / .module.css     # Create or join a group
-    ProposalPage.jsx / .module.css       # Proposal detail — fields, status, comments, responsibilities
+    ProposalPage.jsx / .module.css       # Proposal detail — fields, status, comments, responsibilities, activity
     SettingsPage.jsx / .module.css       # Account info + sign out
   services/
     firebase/
@@ -55,6 +55,8 @@ src/
       comments.js             # addComment, subscribeToComments
       responsibilities.js     # addResponsibility, toggleResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
+      notifications.js        # createNotification, createNotificationsForGroup, subscribeToUserNotifications,
+                              #   markNotificationRead, markAllNotificationsRead
   styles/
     global.css      # Reset + base styles + .loading-screen utility
 ```
@@ -173,8 +175,8 @@ Lookup table — lets authenticated users resolve an invite code to a group ID w
 ```js
 {
   proposalId: string,
-  type: 'proposal_created' | 'fields_updated' | 'status_changed',
-  description: string,         // human-readable summary
+  type: 'proposal_created' | 'fields_updated' | 'status_changed' | 'comment_added' | 'responsibility_assigned',
+  description: string,         // human-readable summary, e.g. "Alex added a comment"
   createdAt: Timestamp
 }
 ```
@@ -183,14 +185,16 @@ Lookup table — lets authenticated users resolve an invite code to a group ID w
 
 ```js
 {
-  userId: string,
-  message: string,
+  userId: string,              // recipient
+  type: 'proposal_created' | 'proposal_updated' | 'status_changed' | 'comment_added' | 'responsibility_assigned',
+  message: string,             // human-readable, e.g. "Alex commented on: Dinner plans"
+  proposalId: string | null,   // links notification to a proposal page
   read: boolean,
   createdAt: Timestamp
 }
 ```
 
-Security rules defined; notification UI not yet implemented.
+Notifications are created by group members on behalf of other group members (not via Cloud Functions). Read/update/delete are scoped to the recipient user.
 
 ---
 
@@ -216,7 +220,7 @@ All status changes are explicit user actions. No automatic transitions.
 | --- | --- | --- |
 | `/login` | Sign in or register | ✅ |
 | `/group-setup` | Create or join a group | ✅ |
-| `/dashboard` | Group info + proposals list | ✅ |
+| `/dashboard` | Pending actions, notifications, proposals | ✅ |
 | `/proposal/:id` | Proposal detail | ✅ |
 | `/settings` | Account info + sign out | ✅ |
 
@@ -237,21 +241,28 @@ All status changes are explicit user actions. No automatic transitions.
 - Group join via invite code
 - `groupInvites` collection for secure invite resolution
 - Dashboard: group name, invite code, real-time proposals list
+- Dashboard: "Needs Attention" section for proposals requiring action
+- Dashboard: notifications panel with unread count and mark-all-read
 - Proposal creation (title required, all other fields optional)
 - Proposal detail page with all editable fields
 - Proposal status system with explicit transitions
-- Activity feed on each proposal
+- Save feedback ("Saved" confirmation after successful edit)
+- Activity feed on each proposal (proposal created, updated, status changed, comment added, responsibility assigned)
 - Comments on proposals
 - Responsibilities with assignee and completion toggle
+- In-app notifications for all key events (proposal created/updated, comment added, responsibility assigned, status changed)
+- Notification unread badge in header
+- Empty states throughout (no proposals, no comments, no responsibilities, no notifications)
+- Error states throughout (failed saves, failed status updates, failed comments, failed Firestore reads)
 - `ProtectedRoute` component — auth guard for all protected pages
 - Firestore security rules covering all collections
 - Settings page (account info + sign out)
 
-### Planned
+### Planned (Phase 5+)
 
-- In-app notifications
-- User profile editing
-- Notification bell / unread count
+- User profile editing (display name)
+- Push notifications
+- Group member management
 
 ---
 
@@ -268,7 +279,7 @@ All status changes are explicit user actions. No automatic transitions.
 
 ## Environment Setup
 
-Copy `.env` to `.env.local` and fill in your Firebase project credentials:
+Copy `.env.example` to `.env` and fill in your Firebase project credentials:
 
 ```sh
 VITE_FIREBASE_API_KEY=

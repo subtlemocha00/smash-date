@@ -24,6 +24,21 @@
   gap: 1rem;
 }
 
+.notifCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 10px;
+  line-height: 1;
+}
+
 .navLink {
   font-size: 0.875rem;
   color: #555;
@@ -80,7 +95,133 @@
 .sectionTitle {
   font-size: 1rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+.sectionBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #ef4444;
+  color: #fff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.textBtn {
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.textBtn:hover {
+  color: #111;
+}
+
+.textBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pending Actions */
+
+.pendingList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pendingList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.pendingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  text-decoration: none;
+  color: #111;
+  gap: 1rem;
+}
+
+.pendingRow:hover .pendingTitle {
+  text-decoration: underline;
+}
+
+.pendingTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pendingHint {
+  font-size: 0.775rem;
+  color: #c2410c;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* Notifications */
+
+.notifList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notifList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.notifItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+}
+
+.notifUnread .notifBody {
+  font-weight: 500;
+}
+
+.notifBody {
+  font-size: 0.875rem;
+  color: #333;
+  flex: 1;
+  min-width: 0;
+}
+
+.notifLink {
+  color: #333;
+  text-decoration: none;
+}
+
+.notifLink:hover {
+  text-decoration: underline;
+}
+
+.notifTime {
+  font-size: 0.775rem;
+  color: #bbb;
+  flex-shrink: 0;
+}
+
+/* Proposal list */
 
 .newBtn {
   padding: 0.35rem 0.75rem;
@@ -126,6 +267,7 @@
   border: 1px solid #ddd;
   border-radius: 6px;
   outline: none;
+  box-sizing: border-box;
 }
 
 .newInput:focus {
@@ -140,6 +282,17 @@
 .muted {
   font-size: 0.875rem;
   color: #888;
+}
+
+.emptyState {
+  font-size: 0.875rem;
+  color: #555;
+}
+
+.errorMsg {
+  font-size: 0.8rem;
+  color: #b91c1c;
+  margin: 0;
 }
 
 .proposalList {
