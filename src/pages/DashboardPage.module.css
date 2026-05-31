@@ -98,7 +98,136 @@
   cursor: not-allowed;
 }
 
+.cancelBtn {
+  font-size: 0.875rem;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  color: #555;
+}
+
+.cancelBtn:hover {
+  background: #f5f5f5;
+}
+
+.newForm {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.newInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+}
+
+.newInput:focus {
+  border-color: #111;
+}
+
+.newFormActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .muted {
   font-size: 0.875rem;
   color: #888;
+}
+
+.proposalList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.proposalList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.proposalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  text-decoration: none;
+  color: #111;
+  gap: 1rem;
+}
+
+.proposalRow:hover .proposalTitle {
+  text-decoration: underline;
+}
+
+.proposalTitle {
+  font-size: 0.9rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposalMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.proposalDate {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status_draft {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status_proposed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status_changes_requested {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.status_accepted {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status_confirmed {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.status_completed {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.status_declined {
+  background: #fee2e2;
+  color: #b91c1c;
 }

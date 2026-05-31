@@ -40,17 +40,21 @@ src/
   context/
     AuthContext.jsx              # Auth state, user profile, exposes useAuth()
   pages/
-    LoginPage.jsx / .module.css  # Email/password + Google sign-in and register
-    DashboardPage.jsx / .module.css  # Group info + proposal list shell
-    GroupSetupPage.jsx / .module.css # Create or join a group
-    ProposalPage.jsx             # [placeholder]
-    SettingsPage.jsx             # [placeholder]
+    LoginPage.jsx / .module.css          # Email/password + Google sign-in and register
+    DashboardPage.jsx / .module.css      # Group info + proposal list
+    GroupSetupPage.jsx / .module.css     # Create or join a group
+    ProposalPage.jsx / .module.css       # Proposal detail — fields, status, comments, responsibilities
+    SettingsPage.jsx / .module.css       # Account info + sign out
   services/
     firebase/
-      config.js     # initializeApp — reads VITE_FIREBASE_* env vars
-      auth.js       # signInWithEmail, registerWithEmail, signInWithGoogle, logOut
-      firestore.js  # db export
-      groups.js     # createGroup, joinGroupByCode
+      config.js               # initializeApp — reads VITE_FIREBASE_* env vars
+      auth.js                 # signInWithEmail, registerWithEmail, signInWithGoogle, logOut
+      firestore.js            # db export
+      groups.js               # createGroup, joinGroupByCode
+      proposals.js            # createProposal, updateProposal, subscribeToGroupProposals, subscribeToProposal
+      comments.js             # addComment, subscribeToComments
+      responsibilities.js     # addResponsibility, toggleResponsibility, deleteResponsibility, subscribeToResponsibilities
+      activityEvents.js       # logActivity, subscribeToActivity
   styles/
     global.css      # Reset + base styles + .loading-screen utility
 ```
@@ -80,7 +84,8 @@ src/
 
 - Auth + user profile: `AuthContext` (React Context), consumed via `useAuth()`
 - Page-local UI state: `useState`
-- Firestore reads: direct SDK calls in `useEffect` per component
+- Firestore reads: `onSnapshot` listeners in `useEffect` per component
+- Firestore writes: async service functions in `src/services/firebase/`
 
 ---
 
@@ -117,34 +122,111 @@ src/
 
 Lookup table — lets authenticated users resolve an invite code to a group ID without querying all groups.
 
-**Planned collections** (not yet implemented):
-- `proposals/{proposalId}`
-- `comments/{commentId}`
-- `responsibilities/{responsibilityId}`
-- `activityEvents/{eventId}`
-- `notifications/{notificationId}`
+### `proposals/{proposalId}`
 
-See `PROJECT_PLAN.md` for full field specs.
+```js
+{
+  groupId: string,
+  createdBy: string,           // userId
+  title: string,
+  description: string,
+  date: string,                // ISO date string (YYYY-MM-DD) or ''
+  time: string,                // HH:MM or ''
+  activity: string,
+  location: string,            // restaurant / location
+  childcareNotes: string,
+  budget: string,
+  notes: string,
+  status: 'draft' | 'proposed' | 'changes_requested' | 'accepted' | 'confirmed' | 'completed' | 'declined',
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
+
+### `comments/{commentId}`
+
+```js
+{
+  proposalId: string,
+  userId: string,
+  displayName: string,         // denormalized at write time
+  message: string,
+  createdAt: Timestamp
+}
+```
+
+### `responsibilities/{responsibilityId}`
+
+```js
+{
+  proposalId: string,
+  title: string,
+  assignedTo: string,          // userId
+  assigneeName: string,        // denormalized at write time
+  completed: boolean,
+  createdAt: Timestamp
+}
+```
+
+### `activityEvents/{eventId}`
+
+```js
+{
+  proposalId: string,
+  type: 'proposal_created' | 'fields_updated' | 'status_changed',
+  description: string,         // human-readable summary
+  createdAt: Timestamp
+}
+```
+
+### `notifications/{notificationId}`
+
+```js
+{
+  userId: string,
+  message: string,
+  read: boolean,
+  createdAt: Timestamp
+}
+```
+
+Security rules defined; notification UI not yet implemented.
 
 ---
 
-## 5. Routes
+## 5. Proposal Status Machine
+
+| Status | Transitions To |
+| --- | --- |
+| `draft` | `proposed` |
+| `proposed` | `changes_requested`, `accepted`, `declined` |
+| `changes_requested` | `proposed` |
+| `accepted` | `confirmed`, `declined` |
+| `confirmed` | `completed` |
+| `completed` | — |
+| `declined` | `proposed` |
+
+All status changes are explicit user actions. No automatic transitions.
+
+---
+
+## 6. Routes
 
 | Route | Purpose | Status |
 | --- | --- | --- |
 | `/login` | Sign in or register | ✅ |
 | `/group-setup` | Create or join a group | ✅ |
-| `/dashboard` | Group info + proposals list | ✅ Shell |
-| `/proposal/:id` | Proposal detail | ⬜ Placeholder |
-| `/settings` | User settings | ⬜ Placeholder |
+| `/dashboard` | Group info + proposals list | ✅ |
+| `/proposal/:id` | Proposal detail | ✅ |
+| `/settings` | Account info + sign out | ✅ |
 
 ---
 
-## 6. Features
+## 7. Features
 
 ### Completed
 
-- Vite + React 19 project scaffold, fully cleaned of template boilerplate
+- Vite + React 19 project scaffold
 - React Router with protected and public routes
 - Firebase project initialization via env vars
 - Email/password authentication (sign in + register)
@@ -153,45 +235,34 @@ See `PROJECT_PLAN.md` for full field specs.
 - Firestore user profile auto-created on first sign-in
 - Group creation with auto-generated 6-char invite code
 - Group join via invite code
-- `groupInvites` collection for secure invite resolution (no full group scan)
-- Dashboard shell: group name, invite code, placeholder proposals section
+- `groupInvites` collection for secure invite resolution
+- Dashboard: group name, invite code, real-time proposals list
+- Proposal creation (title required, all other fields optional)
+- Proposal detail page with all editable fields
+- Proposal status system with explicit transitions
+- Activity feed on each proposal
+- Comments on proposals
+- Responsibilities with assignee and completion toggle
 - `ProtectedRoute` component — auth guard for all protected pages
-- Firestore security rules (`firestore.rules`) covering all planned collections
-
-### In Progress
-
-- Nothing currently in progress
+- Firestore security rules covering all collections
+- Settings page (account info + sign out)
 
 ### Planned
 
-- Proposal CRUD + status workflow
-- Proposal detail page
-- Comments
-- Responsibilities
-- Activity feed
 - In-app notifications
-- Settings page
 - User profile editing
+- Notification bell / unread count
 
 ---
 
-## 7. Development Rules
+## 8. Development Rules
 
 - **Styling:** CSS Modules only — no Tailwind, no component libraries
 - **State:** Context or local state only — no Redux, no Zustand yet
 - **Data model:** `memberIds[]` arrays throughout — no hardcoded 2-user logic
 - **Security:** All Firestore writes validate ownership/membership via rules
 - **Config:** All Firebase values via `VITE_FIREBASE_*` env vars — never hardcoded
-- **Scope:** Do not implement features outside the MVP list in `PROJECT_PLAN.md`
-
----
-
-## 8. Next Steps (Phase 3)
-
-- Proposal CRUD: create, view, edit
-- Proposal status machine: `draft → proposed → accepted → confirmed`
-- Proposal detail page at `/proposal/:id`
-- Wire up "+ New Proposal" button on dashboard
+- **Scope:** Do not implement features outside the MVP list
 
 ---
 
@@ -209,6 +280,7 @@ VITE_FIREBASE_APP_ID=
 ```
 
 Enable these Firebase Auth providers in the Firebase console:
+
 - Email/Password
 - Google
 
