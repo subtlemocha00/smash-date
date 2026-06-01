@@ -1,6 +1,6 @@
 # PROJECT_PLAN.md
 
-# App Name (Working Title)
+# Date Smash
 
 DateSync
 
