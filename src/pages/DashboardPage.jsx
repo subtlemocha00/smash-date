@@ -157,7 +157,11 @@ export default function DashboardPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <span className={styles.logo}>Smash Date</span>
+        <span className={styles.logo}>
+          <span className={styles.logoAccent}>Smash</span>
+          <span className={styles.logoBase}>Date</span>
+          <span className={styles.logoDot}>.</span>
+        </span>
         <div className={styles.headerRight}>
           {unreadCount > 0 && (
             <span className={styles.notifCount}>{unreadCount}</span>

@@ -1,3 +1,243 @@
+/* ============================================================
+   SMASH DATE — Design Tokens (from design/project/colors_and_type.css)
+   Foundation only: defines CSS variables for the design system.
+   Inert for screens that use hardcoded colors.
+   ============================================================ */
+:root {
+  /* Brand palette (raw) */
+  --granite: #4c5b5c;
+  --coral: #ff715b;
+  --pollen: #f9cb40;
+  --chartreuse: #bced09;
+  --azure: #2f52e0;
+
+  /* Brand tints + shades */
+  --coral-700: #d8442f;
+  --coral-600: #ef5a43;
+  --coral-500: #ff715b;
+  --coral-200: #ffc7bd;
+  --coral-100: #ffe4de;
+  --coral-050: #fff2ef;
+
+  --azure-700: #1f3bb0;
+  --azure-600: #2845c8;
+  --azure-100: #dbe2fb;
+  --azure-050: #eef1fe;
+
+  --chartreuse-700: #6f8a00;
+  --green-600: #5a9a16;
+  --green-100: #e7f4cf;
+  --green-050: #f4f9e6;
+
+  --pollen-700: #b5860a;
+  --pollen-600: #e0a91f;
+  --pollen-100: #fdeec0;
+  --pollen-050: #fef8e3;
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.5rem;
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.04em;
+  --tracking-code: 0.08em;
+
+  /* Spacing (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --header-h: 56px;
+  --content-max: 680px;
+  --tap-min: 44px;
+}
+
+/* Light mode (default) */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f3f6f6;
+  --surface: #ffffff;
+  --surface-2: #eaeeee;
+  --surface-3: #e1e6e6;
+
+  --border: #dde3e3;
+  --border-strong: #c6cfcf;
+
+  --fg: #1b2425;
+  --fg-muted: #5b6a6b;
+  --fg-subtle: #8a9899;
+  --fg-faint: #b3bebe;
+
+  --primary: var(--coral-500);
+  --primary-hover: var(--coral-600);
+  --primary-press: var(--coral-700);
+  --on-primary: #ffffff;
+  --primary-soft-bg: var(--coral-050);
+  --primary-soft-fg: var(--coral-700);
+
+  --link: var(--azure);
+  --focus-ring: color-mix(in oklch, var(--coral) 55%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(27, 36, 37, 0.06);
+  --shadow: 0 1px 4px rgba(27, 36, 37, 0.08);
+  --shadow-md: 0 4px 14px rgba(27, 36, 37, 0.10);
+  --shadow-lg: 0 12px 32px rgba(27, 36, 37, 0.14);
+
+  --danger: var(--coral-700);
+  --success: var(--chartreuse-700);
+  --warning: var(--pollen-700);
+  --info: var(--azure);
+
+  /* Status badges */
+  --st-draft-bg: #eceff0;
+  --st-draft-fg: #5b6a6b;
+  --st-proposed-bg: var(--azure-050);
+  --st-proposed-fg: var(--azure-700);
+  --st-changes-bg: var(--pollen-050);
+  --st-changes-fg: var(--pollen-700);
+  --st-accepted-bg: var(--green-050);
+  --st-accepted-fg: var(--chartreuse-700);
+  --st-confirmed-bg: var(--green-100);
+  --st-confirmed-fg: #3c6b0f;
+  --st-completed-bg: #e8ecec;
+  --st-completed-fg: var(--granite);
+  --st-declined-bg: var(--coral-050);
+  --st-declined-fg: var(--coral-700);
+}
+
+/* Dark mode (explicit) */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #161d1e;
+  --surface: #1f2829;
+  --surface-2: #283233;
+  --surface-3: #313d3e;
+
+  --border: #344041;
+  --border-strong: #46555680;
+
+  --fg: #eef2f2;
+  --fg-muted: #a4b3b3;
+  --fg-subtle: #7d8e8f;
+  --fg-faint: #5d6e6f;
+
+  --primary: var(--coral-500);
+  --primary-hover: #ff8472;
+  --primary-press: #ff9586;
+  --on-primary: #2a1009;
+  --primary-soft-bg: color-mix(in oklch, var(--coral) 16%, var(--surface));
+  --primary-soft-fg: #ffae9f;
+
+  --link: #8ea3ff;
+  --focus-ring: color-mix(in oklch, var(--coral) 60%, transparent);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+
+  --danger: #ff8472;
+  --success: #cbe86a;
+  --warning: #f6d473;
+  --info: #8ea3ff;
+
+  --st-draft-bg: #2b3637;
+  --st-draft-fg: #a4b3b3;
+  --st-proposed-bg: #1c2c54;
+  --st-proposed-fg: #aebef9;
+  --st-changes-bg: #3a2f0f;
+  --st-changes-fg: #f6d473;
+  --st-accepted-bg: #2a3a10;
+  --st-accepted-fg: #cbe86a;
+  --st-confirmed-bg: #2f4416;
+  --st-confirmed-fg: #d6f08a;
+  --st-completed-bg: #2b3637;
+  --st-completed-fg: #9fb0b0;
+  --st-declined-bg: #3d211b;
+  --st-declined-fg: #ff9b8a;
+}
+
+/* Follow OS preference when no explicit data-theme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #161d1e;
+    --surface: #1f2829;
+    --surface-2: #283233;
+    --surface-3: #313d3e;
+    --border: #344041;
+    --border-strong: #46555680;
+    --fg: #eef2f2;
+    --fg-muted: #a4b3b3;
+    --fg-subtle: #7d8e8f;
+    --fg-faint: #5d6e6f;
+    --primary-hover: #ff8472;
+    --primary-press: #ff9586;
+    --on-primary: #2a1009;
+    --primary-soft-bg: color-mix(in oklch, var(--coral) 16%, #1f2829);
+    --primary-soft-fg: #ffae9f;
+    --link: #8ea3ff;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+    --danger: #ff8472;
+    --success: #cbe86a;
+    --warning: #f6d473;
+    --info: #8ea3ff;
+    --st-draft-bg: #2b3637;
+    --st-draft-fg: #a4b3b3;
+    --st-proposed-bg: #1c2c54;
+    --st-proposed-fg: #aebef9;
+    --st-changes-bg: #3a2f0f;
+    --st-changes-fg: #f6d473;
+    --st-accepted-bg: #2a3a10;
+    --st-accepted-fg: #cbe86a;
+    --st-confirmed-bg: #2f4416;
+    --st-confirmed-fg: #d6f08a;
+    --st-completed-bg: #2b3637;
+    --st-completed-fg: #9fb0b0;
+    --st-declined-bg: #3d211b;
+    --st-declined-fg: #ff9b8a;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -22,6 +262,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
-  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
 }

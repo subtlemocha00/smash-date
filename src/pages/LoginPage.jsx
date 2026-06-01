@@ -50,8 +50,12 @@ export default function LoginPage() {
 
   return (
     <div className={styles.page}>
+      <h1 className={styles.wordmark}>
+        <span className={styles.wordmarkAccent}>Smash</span>
+        <span className={styles.wordmarkBase}>Date</span>
+        <span className={styles.wordmarkDot}>.</span>
+      </h1>
       <div className={styles.card}>
-        <h1 className={styles.title}>Smash Date</h1>
         <div className={styles.tabs}>
           <button
             className={mode === 'login' ? styles.activeTab : styles.tab}
@@ -107,9 +111,10 @@ export default function LoginPage() {
           disabled={submitting}
           type="button"
         >
-          Continue with Google
+          <span className={styles.googleG}>G</span> Continue with Google
         </button>
       </div>
+      <p className={styles.tagline}>Propose. Refine. Lock it in.</p>
     </div>
   )
 }
