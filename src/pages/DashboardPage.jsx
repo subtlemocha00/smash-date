@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Navigate, Link, useNavigate } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useGroups } from '../context/GroupContext'
 import { logOut } from '../services/firebase/auth'
-import { db } from '../services/firebase/firestore'
+import GroupSwitcher from '../components/GroupSwitcher'
 import { createProposal, subscribeToGroupProposals } from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
 import {
@@ -37,11 +37,8 @@ function formatDate(ts) {
 
 export default function DashboardPage() {
   const { user, userProfile } = useAuth()
+  const { groupsLoading, activeGroupId, activeGroup } = useGroups()
   const navigate = useNavigate()
-
-  const [group, setGroup] = useState(null)
-  const [groupLoading, setGroupLoading] = useState(true)
-  const [groupError, setGroupError] = useState('')
 
   const [proposals, setProposals] = useState([])
   const [proposalsLoading, setProposalsLoading] = useState(true)
@@ -56,33 +53,18 @@ export default function DashboardPage() {
   const [createError, setCreateError] = useState('')
 
   useEffect(() => {
-    if (!userProfile?.groupId) {
-      setGroupLoading(false)
-      return
-    }
-    getDoc(doc(db, 'groups', userProfile.groupId))
-      .then((snap) => {
-        if (snap.exists()) setGroup({ id: snap.id, ...snap.data() })
-        else setGroupError('Group not found.')
-        setGroupLoading(false)
-      })
-      .catch(() => {
-        setGroupError('Failed to load group.')
-        setGroupLoading(false)
-      })
-  }, [userProfile?.groupId])
-
-  useEffect(() => {
-    if (!userProfile?.groupId) {
+    if (!activeGroupId) {
+      setProposals([])
       setProposalsLoading(false)
       return
     }
-    const unsub = subscribeToGroupProposals(userProfile.groupId, (list) => {
+    setProposalsLoading(true)
+    const unsub = subscribeToGroupProposals(activeGroupId, (list) => {
       setProposals(list)
       setProposalsLoading(false)
     })
     return unsub
-  }, [userProfile?.groupId])
+  }, [activeGroupId])
 
   useEffect(() => {
     if (!user?.uid) return
@@ -98,32 +80,37 @@ export default function DashboardPage() {
   }, [user?.uid])
 
   if (!userProfile) return null
-  if (!userProfile.groupId) return <Navigate to="/group-setup" replace />
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const hasGroup = !!activeGroup
+
+  // Notifications are stored per-user across all groups; show only those tied to
+  // the active group.
+  const groupNotifications = notifications.filter((n) => n.groupId === activeGroupId)
+  const unreadCount = groupNotifications.filter((n) => !n.read).length
   const pendingActions = proposals.filter((p) =>
     ['proposed', 'changes_requested', 'accepted'].includes(p.status)
   )
 
   async function handleCreateProposal(e) {
     e.preventDefault()
-    if (!newTitle.trim()) return
+    if (!newTitle.trim() || !activeGroupId) return
     setCreating(true)
     setCreateError('')
     try {
-      const proposalId = await createProposal(userProfile.groupId, user.uid, newTitle.trim())
+      const proposalId = await createProposal(activeGroupId, user.uid, newTitle.trim())
       await logActivity(
         proposalId,
         'proposal_created',
         `${userProfile.displayName || 'Someone'} created this proposal`
       )
-      if (group?.memberIds) {
+      if (activeGroup?.memberIds) {
         await createNotificationsForGroup(
-          group.memberIds,
+          activeGroup.memberIds,
           user.uid,
           'proposal_created',
           `${userProfile.displayName || 'Someone'} created a new proposal: ${newTitle.trim()}`,
-          proposalId
+          proposalId,
+          activeGroupId
         )
       }
       navigate(`/proposal/${proposalId}`)
@@ -136,7 +123,7 @@ export default function DashboardPage() {
   async function handleMarkAllRead() {
     setMarkingAllRead(true)
     try {
-      await markAllNotificationsRead(notifications)
+      await markAllNotificationsRead(groupNotifications)
     } finally {
       setMarkingAllRead(false)
     }
@@ -174,20 +161,20 @@ export default function DashboardPage() {
       </header>
 
       <main className={styles.main}>
-        {/* Group info */}
+        {/* Group info + switcher */}
         <section className={styles.section}>
-          {groupLoading ? (
-            <p className={styles.muted}>Loading group…</p>
-          ) : groupError ? (
-            <p className={styles.errorMsg}>{groupError}</p>
-          ) : group ? (
+          {groupsLoading ? (
+            <p className={styles.muted}>Loading groups…</p>
+          ) : (
             <>
-              <h2 className={styles.groupName}>{group.name}</h2>
-              <p className={styles.muted}>
-                Invite code: <strong>{group.inviteCode}</strong>
-              </p>
+              <GroupSwitcher />
+              {activeGroup && (
+                <p className={`${styles.muted} ${styles.inviteLine}`}>
+                  Invite code: <strong>{activeGroup.inviteCode}</strong>
+                </p>
+              )}
             </>
-          ) : null}
+          )}
         </section>
 
         {/* Needs Attention */}
@@ -231,11 +218,11 @@ export default function DashboardPage() {
           </div>
           {notifLoading ? (
             <p className={styles.muted}>Loading…</p>
-          ) : notifications.length === 0 ? (
+          ) : groupNotifications.length === 0 ? (
             <p className={styles.muted}>You&apos;re all caught up.</p>
           ) : (
             <ul className={styles.notifList}>
-              {notifications.slice(0, 5).map((n) => (
+              {groupNotifications.slice(0, 5).map((n) => (
                 <li
                   key={n.id}
                   className={`${styles.notifItem} ${!n.read ? styles.notifUnread : ''}`}
@@ -264,13 +251,19 @@ export default function DashboardPage() {
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>Proposals</h2>
-            {!showNewForm && (
+            {hasGroup && !showNewForm && (
               <button className={styles.newBtn} onClick={openNewForm} type="button">
                 + New
               </button>
             )}
           </div>
 
+          {!hasGroup ? (
+            <p className={styles.emptyState}>
+              Join or create a group above to start planning dates.
+            </p>
+          ) : (
+            <>
           {showNewForm && (
             <form onSubmit={handleCreateProposal} className={styles.newForm}>
               <input
@@ -316,6 +309,8 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
+          )}
+            </>
           )}
         </section>
       </main>

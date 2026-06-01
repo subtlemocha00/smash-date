@@ -1,0 +1,36 @@
+.group {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.option {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  padding: 0.4rem 0.95rem;
+  min-height: var(--tap-min);
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.option + .option {
+  border-left: 1px solid var(--border-strong);
+}
+
+.option:hover:not(.active) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.active {
+  background: var(--primary);
+  color: var(--on-primary);
+}

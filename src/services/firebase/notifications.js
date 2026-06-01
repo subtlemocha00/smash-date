@@ -11,21 +11,31 @@ import {
 } from 'firebase/firestore'
 import { db } from './firestore'
 
-export async function createNotification(userId, type, message, proposalId) {
+export async function createNotification(userId, type, message, proposalId, groupId) {
   await addDoc(collection(db, 'notifications'), {
     userId,
     type,
     message,
     proposalId: proposalId ?? null,
+    groupId: groupId ?? null,
     read: false,
     createdAt: serverTimestamp()
   })
 }
 
-export async function createNotificationsForGroup(memberIds, actorUid, type, message, proposalId) {
+export async function createNotificationsForGroup(
+  memberIds,
+  actorUid,
+  type,
+  message,
+  proposalId,
+  groupId
+) {
   const recipients = memberIds.filter((uid) => uid !== actorUid)
   if (recipients.length === 0) return
-  await Promise.all(recipients.map((uid) => createNotification(uid, type, message, proposalId)))
+  await Promise.all(
+    recipients.map((uid) => createNotification(uid, type, message, proposalId, groupId))
+  )
 }
 
 export function subscribeToUserNotifications(userId, callback, onError) {

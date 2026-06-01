@@ -65,6 +65,13 @@
   padding: 7px 0;
 }
 
+.controlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .row + .row {
   border-top: 1px solid var(--border);
 }

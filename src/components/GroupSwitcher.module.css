@@ -1,0 +1,128 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+.select {
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 0.4rem 0.6rem;
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.select:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.newBtn {
+  font-family: var(--font-body);
+  padding: 0.35rem 0.75rem;
+  min-height: 36px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.newBtn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.newBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  min-height: 36px;
+  cursor: pointer;
+  color: var(--fg);
+  transition: background 0.12s ease;
+}
+
+.cancelBtn:hover {
+  background: var(--surface-2);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.emptyTitle {
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.newForm {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.input {
+  width: 100%;
+  font-family: var(--font-body);
+  padding: 0.55rem 0.7rem;
+  font-size: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--fg-subtle);
+}
+
+.input:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.newFormActions {
+  display: flex;
+  gap: 8px;
+}
+
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  margin: 0;
+}

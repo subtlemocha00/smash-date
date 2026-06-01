@@ -122,17 +122,19 @@ export default function ProposalPage() {
   }, [id, proposal?.id])
 
   useEffect(() => {
-    if (!userProfile?.groupId) return
+    if (!proposal?.groupId) return
     async function loadMembers() {
       try {
-        const groupSnap = await getDoc(doc(db, 'groups', userProfile.groupId))
+        const groupSnap = await getDoc(doc(db, 'groups', proposal.groupId))
         if (!groupSnap.exists()) return
-        const { memberIds: ids } = groupSnap.data()
+        const data = groupSnap.data()
+        const ids = data.memberIds ?? []
+        const names = data.memberNames ?? {}
         setMemberIds(ids)
-        const snaps = await Promise.all(ids.map((uid) => getDoc(doc(db, 'users', uid))))
+        // Names are denormalized on the group (we can't read other users' docs).
         const map = {}
-        snaps.forEach((s) => {
-          if (s.exists()) map[s.id] = s.data().displayName || s.data().email
+        ids.forEach((uid) => {
+          map[uid] = names[uid] || 'Group member'
         })
         setMembers(map)
       } catch {
@@ -140,7 +142,7 @@ export default function ProposalPage() {
       }
     }
     loadMembers()
-  }, [userProfile?.groupId])
+  }, [proposal?.groupId])
 
   function startEditing() {
     setEditFields({
@@ -182,7 +184,8 @@ export default function ProposalPage() {
           user.uid,
           'proposal_updated',
           `${userProfile.displayName || 'Someone'} updated the proposal: ${editFields.title.trim()}`,
-          id
+          id,
+          proposal.groupId
         )
       }
       setEditing(false)
@@ -210,7 +213,8 @@ export default function ProposalPage() {
           user.uid,
           'status_changed',
           `${userProfile.displayName || 'Someone'} changed ${proposal?.title || 'a proposal'} to ${STATUS_LABELS[newStatus]}`,
-          id
+          id,
+          proposal.groupId
         )
       }
     } catch {
@@ -236,7 +240,8 @@ export default function ProposalPage() {
           user.uid,
           'comment_added',
           `${userProfile.displayName || 'Someone'} commented on: ${proposal?.title || 'a proposal'}`,
-          id
+          id,
+          proposal.groupId
         )
       }
       setCommentText('')
@@ -249,23 +254,26 @@ export default function ProposalPage() {
 
   async function submitResponsibility(e) {
     e.preventDefault()
-    if (!respTitle.trim() || !respAssignee) return
+    if (!respTitle.trim()) return
     setRespSubmitting(true)
     setRespError('')
     try {
-      const assigneeName = members[respAssignee] || respAssignee
-      await addResponsibility(id, respTitle.trim(), respAssignee, assigneeName)
+      const assigneeName = respAssignee ? members[respAssignee] || respAssignee : ''
+      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName)
       await logActivity(
         id,
         'responsibility_assigned',
-        `${userProfile.displayName || 'Someone'} assigned "${respTitle.trim()}" to ${assigneeName}`
+        respAssignee
+          ? `${userProfile.displayName || 'Someone'} assigned "${respTitle.trim()}" to ${assigneeName}`
+          : `${userProfile.displayName || 'Someone'} added "${respTitle.trim()}"`
       )
-      if (respAssignee !== user.uid) {
+      if (respAssignee && respAssignee !== user.uid) {
         await createNotification(
           respAssignee,
           'responsibility_assigned',
           `${userProfile.displayName || 'Someone'} assigned you "${respTitle.trim()}" on ${proposal?.title || 'a proposal'}`,
-          id
+          id,
+          proposal.groupId
         )
       }
       setRespTitle('')
@@ -473,7 +481,7 @@ export default function ProposalPage() {
                       {r.title}
                     </span>
                   </label>
-                  <span className={styles.respAssignee}>{r.assigneeName}</span>
+                  <span className={styles.respAssignee}>{r.assigneeName || 'Unassigned'}</span>
                   <button
                     className={styles.removeBtn}
                     onClick={() => deleteResponsibility(r.id)}
@@ -498,7 +506,7 @@ export default function ProposalPage() {
               value={respAssignee}
               onChange={(e) => setRespAssignee(e.target.value)}
             >
-              <option value="">Assign to…</option>
+              <option value="">Unassigned</option>
               {Object.entries(members).map(([uid, name]) => (
                 <option key={uid} value={uid}>
                   {name}
@@ -508,7 +516,7 @@ export default function ProposalPage() {
             <button
               className={styles.addBtn}
               type="submit"
-              disabled={respSubmitting || !respTitle.trim() || !respAssignee}
+              disabled={respSubmitting || !respTitle.trim()}
             >
               Add
             </button>

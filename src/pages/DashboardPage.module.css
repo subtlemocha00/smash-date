@@ -343,6 +343,10 @@
   color: var(--fg-muted);
 }
 
+.inviteLine {
+  margin-top: 12px;
+}
+
 .emptyState {
   font-size: 14px;
   color: var(--fg-subtle);

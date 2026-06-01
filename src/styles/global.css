@@ -247,10 +247,10 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  color: #111;
-  background: #fff;
+  color: var(--fg);
+  background: var(--bg);
 }
 
 #root {

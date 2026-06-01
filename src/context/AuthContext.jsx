@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
               displayName: firebaseUser.displayName || '',
               email: firebaseUser.email,
               groupId: null,
+              activeGroupId: null,
               createdAt: serverTimestamp()
             }
             await setDoc(userRef, profile)

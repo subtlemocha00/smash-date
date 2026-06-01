@@ -16,15 +16,67 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    function isGroupCreator(groupId) {
+      let g = get(/databases/$(database)/documents/groups/$(groupId)).data;
+      // Legacy groups predate createdBy; any member may manage them.
+      return isAuth() && (
+        (('createdBy' in g) && g.createdBy == request.auth.uid) ||
+        (!('createdBy' in g) && request.auth.uid in g.memberIds)
+      );
+    }
+
+    // A non-member joining via invite may only add themselves to memberIds,
+    // leaving every other field untouched.
+    function isSelfJoin(groupId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isAuth() &&
+        !(request.auth.uid in before.memberIds) &&
+        request.auth.uid in after.memberIds &&
+        after.memberIds.removeAll(before.memberIds) == [request.auth.uid] &&
+        after.name == before.name &&
+        after.inviteCode == before.inviteCode &&
+        // The joiner must not introduce or alter the creator field.
+        (('createdBy' in before)
+          ? (('createdBy' in after) && after.createdBy == before.createdBy)
+          : !('createdBy' in after));
+    }
+
+    // Any member may set only their own entry in the memberNames map, and
+    // nothing else on the group.
+    function isOwnNameUpdate(groupId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return isGroupMember(groupId) &&
+        after.diff(before).affectedKeys().hasOnly(['memberNames']) &&
+        (
+          !('memberNames' in before) ||
+          after.memberNames.diff(before.memberNames).affectedKeys()
+            .hasOnly([request.auth.uid])
+        );
+    }
+
     match /groups/{groupId} {
-      allow read: if isGroupMember(groupId);
-      allow create: if isAuth() && request.auth.uid in request.resource.data.memberIds;
-      allow update: if isGroupMember(groupId);
+      // Test the document directly (not via get()) so this is also valid for the
+      // "memberIds array-contains uid" collection query the dashboard runs.
+      allow read: if isAuth() && request.auth.uid in resource.data.memberIds;
+      allow create: if isAuth()
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.createdBy == request.auth.uid;
+      // Only the owner can rename or remove members; anyone holding a valid
+      // invite may add themselves; any member may record their own name.
+      allow update: if isGroupCreator(groupId)
+        || isSelfJoin(groupId)
+        || isOwnNameUpdate(groupId);
+      // Only the owner can delete the entire group.
+      allow delete: if isGroupCreator(groupId);
     }
 
     match /groupInvites/{code} {
       allow read: if isAuth();
       allow create: if isAuth();
+      // Only the owner of the referenced group may remove its invite.
+      allow delete: if isGroupCreator(resource.data.groupId);
     }
 
     match /proposals/{proposalId} {
@@ -51,7 +103,7 @@ service cloud.firestore {
     }
 
     match /activityEvents/{eventId} {
-      allow read: if isGroupMember(
+      allow read, delete: if isGroupMember(
         get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
       allow create: if isAuth() && isGroupMember(

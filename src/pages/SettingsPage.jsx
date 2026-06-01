@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { logOut } from '../services/firebase/auth'
+import GroupManager from '../components/GroupManager'
+import ThemeToggle from '../components/ThemeToggle'
 import styles from './SettingsPage.module.css'
 
 export default function SettingsPage() {
@@ -24,6 +26,17 @@ export default function SettingsPage() {
             <span className={styles.label}>Email</span>
             <span className={styles.value}>{user?.email}</span>
           </div>
+        </section>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Appearance</h2>
+          <div className={styles.controlRow}>
+            <span className={styles.label}>Theme</span>
+            <ThemeToggle />
+          </div>
+        </section>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Group</h2>
+          <GroupManager />
         </section>
         <section className={styles.section}>
           <button className={styles.signOutBtn} onClick={logOut} type="button">
