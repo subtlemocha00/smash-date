@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--bg);color:var(--fg);padding:30px 26px;display:flex;gap:28px;align-items:center;flex-wrap:wrap;}
+  .sw{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .box{width:108px;height:62px;background:var(--surface);border-radius:8px;}
+  .name{font-size:12px;font-weight:600;}
+  .b1{box-shadow:var(--shadow-sm);}
+  .b2{box-shadow:var(--shadow);}
+  .b3{box-shadow:var(--shadow-md);}
+  .b4{box-shadow:var(--shadow-lg);}
+</style>
+</head>
+<body>
+  <div class="sw"><div class="box b1"></div><span class="name">shadow-sm</span></div>
+  <div class="sw"><div class="box b2"></div><span class="name">shadow · cards</span></div>
+  <div class="sw"><div class="box b3"></div><span class="name">shadow-md · menus</span></div>
+  <div class="sw"><div class="box b4"></div><span class="name">shadow-lg · sheets</span></div>
+</body>
+</html>

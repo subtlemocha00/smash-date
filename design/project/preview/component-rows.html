@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:20px 26px;}
+  .list{display:flex;flex-direction:column;}
+  .item{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid #f0f0f0;}
+  .item:first-child{border-top:none;}
+  .av{width:30px;height:30px;border-radius:999px;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:#fff;flex-shrink:0;}
+  .body{flex:1;min-width:0;font-size:14px;}
+  .body b{font-weight:600;}
+  .time{font-size:12px;color:var(--fg-faint);font-family:var(--font-mono);}
+  .dot{width:7px;height:7px;border-radius:999px;background:var(--coral);flex-shrink:0;}
+</style>
+</head>
+<body>
+  <div class="list">
+    <div class="item"><span class="dot"></span><span class="av" style="background:var(--coral);">A</span><span class="body"><b>Alex</b> commented on Anniversary dinner</span><span class="time">Mar 4</span></div>
+    <div class="item"><span style="width:7px;"></span><span class="av" style="background:var(--azure);">S</span><span class="body"><b>Sam</b> assigned you "Reserve table"</span><span class="time">Mar 3</span></div>
+    <div class="item"><span style="width:7px;"></span><span class="av" style="background:var(--granite);">J</span><span class="body"><b>Jess</b> confirmed Sunday hike</span><span class="time">Mar 1</span></div>
+  </div>
+</body>
+</html>

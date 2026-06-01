@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:24px 26px;display:flex;flex-direction:column;gap:14px;max-width:360px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  label{font-size:13px;font-weight:500;color:var(--fg-muted);}
+  input{font-family:var(--font-body);font-size:14px;padding:0.5rem 0.7rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--fg);outline:none;}
+  input::placeholder{color:var(--fg-subtle);}
+  .focused{border-color:var(--fg);box-shadow:0 0 0 3px var(--focus-ring);}
+  select{font-family:var(--font-body);font-size:14px;padding:0.5rem 0.6rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--fg);}
+</style>
+</head>
+<body>
+  <div class="field"><label>Restaurant / Location</label><input placeholder="Where to?" value="Lucia's Trattoria" /></div>
+  <div class="field"><label>Activity</label><input class="focused" placeholder="What are we doing?" /></div>
+  <div class="field"><label>Assign to</label><select><option>Sam</option><option>Alex</option></select></div>
+</body>
+</html>

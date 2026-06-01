@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:24px 26px;}
+  .grid{display:flex;gap:22px;flex-wrap:wrap;}
+  .ic{display:flex;flex-direction:column;align-items:center;gap:7px;}
+  .ic svg{width:24px;height:24px;color:var(--fg);stroke-width:2;}
+  .lbl{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-subtle);}
+  .note{font-size:12px;color:var(--fg-muted);margin-top:16px;}
+</style>
+</head>
+<body>
+  <div class="grid">
+    <span class="ic"><i data-lucide="bell"></i><span class="lbl">bell</span></span>
+    <span class="ic"><i data-lucide="settings"></i><span class="lbl">settings</span></span>
+    <span class="ic"><i data-lucide="plus"></i><span class="lbl">plus</span></span>
+    <span class="ic"><i data-lucide="check"></i><span class="lbl">check</span></span>
+    <span class="ic"><i data-lucide="x"></i><span class="lbl">x</span></span>
+    <span class="ic"><i data-lucide="calendar"></i><span class="lbl">calendar</span></span>
+    <span class="ic"><i data-lucide="map-pin"></i><span class="lbl">map-pin</span></span>
+    <span class="ic"><i data-lucide="chevron-left"></i><span class="lbl">chevron</span></span>
+    <span class="ic"><i data-lucide="message-circle"></i><span class="lbl">comment</span></span>
+  </div>
+  <p class="note">Lucide — 2px stroke, round caps, currentColor. Substitute for the planned react-icons/Feather set.</p>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

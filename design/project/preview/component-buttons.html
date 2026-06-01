@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:24px 26px;display:flex;flex-direction:column;gap:16px;}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  button{font-family:var(--font-body);font-size:14px;font-weight:500;border-radius:6px;padding:0.5rem 0.95rem;cursor:pointer;border:1px solid transparent;}
+  .primary{background:var(--primary);color:var(--on-primary);border:none;}
+  .primary.hover{background:var(--primary-hover);}
+  .primary.press{background:var(--primary-press);}
+  .secondary{background:var(--surface);color:var(--fg);border:1px solid var(--border-strong);}
+  .secondary.hover{background:var(--surface-2);}
+  .text{background:none;border:none;color:var(--fg-muted);text-decoration:underline;text-underline-offset:2px;padding:0.5rem 0;}
+  .accept{background:var(--surface);border:1px solid #6ee7b7;color:#3c6b0f;}
+  .danger{background:var(--surface);border:1px solid var(--coral-200);color:var(--coral-700);}
+  .disabled{opacity:.4;cursor:not-allowed;}
+  .tag{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);width:54px;}
+</style>
+</head>
+<body>
+  <div class="row"><span class="tag">default</span><button class="primary">Confirm</button><button class="secondary">Cancel</button><button class="text">Mark all read</button></div>
+  <div class="row"><span class="tag">hover</span><button class="primary hover">Confirm</button><button class="secondary hover">Cancel</button><button class="primary press">Confirm</button><span style="font-size:11px;color:var(--fg-subtle);">press →</span></div>
+  <div class="row"><span class="tag">status</span><button class="accept">Accept</button><button class="danger">Decline</button><button class="primary disabled">Saving…</button></div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:24px;display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap;}
+  .sw{display:flex;flex-direction:column;align-items:center;gap:9px;}
+  .box{width:78px;height:62px;background:var(--coral-100);border:1.5px solid var(--coral);}
+  .name{font-size:12px;font-weight:600;}
+  .val{font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);}
+</style>
+</head>
+<body>
+  <div class="sw"><div class="box" style="border-radius:6px;"></div><span class="name">sm</span><span class="val">6px · buttons</span></div>
+  <div class="sw"><div class="box" style="border-radius:8px;"></div><span class="name">base</span><span class="val">8px · cards</span></div>
+  <div class="sw"><div class="box" style="border-radius:14px;"></div><span class="name">lg</span><span class="val">14px · sheets</span></div>
+  <div class="sw"><div class="box" style="border-radius:999px;width:62px;"></div><span class="name">pill</span><span class="val">999px · chips</span></div>
+</body>
+</html>

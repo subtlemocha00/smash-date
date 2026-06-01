@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:24px 26px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+  .av{border-radius:999px;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;color:#fff;}
+  .stack{display:flex;}
+  .stack .av{border:2px solid var(--surface);margin-left:-10px;}
+  .stack .av:first-child{margin-left:0;}
+  .lbl{font-size:12px;color:var(--fg-muted);width:100%;margin-top:4px;}
+</style>
+</head>
+<body>
+  <span class="av" style="width:44px;height:44px;font-size:18px;background:var(--coral);">A</span>
+  <span class="av" style="width:36px;height:36px;font-size:15px;background:var(--azure);">S</span>
+  <span class="av" style="width:30px;height:30px;font-size:13px;background:var(--granite);">J</span>
+  <span class="stack" style="margin-left:14px;">
+    <span class="av" style="width:34px;height:34px;font-size:14px;background:var(--coral);">A</span>
+    <span class="av" style="width:34px;height:34px;font-size:14px;background:var(--azure);">S</span>
+    <span class="av" style="width:34px;height:34px;font-size:14px;background:var(--granite);">+2</span>
+  </span>
+  <span class="lbl">Initials on a brand-tinted chip · sizes 30 / 36 / 44 · pill · overlapping group stack</span>
+</body>
+</html>

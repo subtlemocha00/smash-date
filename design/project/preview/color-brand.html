@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:22px 24px;}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+  .sw{display:flex;flex-direction:column;gap:8px;}
+  .chip{height:74px;border-radius:8px;border:1px solid rgba(0,0,0,.06);}
+  .name{font-size:12px;font-weight:600;color:var(--fg);}
+  .hex{font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);}
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="sw"><div class="chip" style="background:#ff715b;"></div><span class="name">Coral</span><span class="hex">#FF715B</span></div>
+    <div class="sw"><div class="chip" style="background:#4c5b5c;"></div><span class="name">Granite</span><span class="hex">#4C5B5C</span></div>
+    <div class="sw"><div class="chip" style="background:#f9cb40;"></div><span class="name">Pollen</span><span class="hex">#F9CB40</span></div>
+    <div class="sw"><div class="chip" style="background:#bced09;"></div><span class="name">Chartreuse</span><span class="hex">#BCED09</span></div>
+    <div class="sw"><div class="chip" style="background:#2f52e0;"></div><span class="name">Azure</span><span class="hex">#2F52E0</span></div>
+  </div>
+</body>
+</html>

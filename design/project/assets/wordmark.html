@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Date Smash — Wordmark</title>
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    padding: var(--space-8);
+    align-items: center;
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-6) var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .tile.dark { background: #1f2829; border-color: #344041; color: #eef2f2; }
+  .cap { font-size: var(--text-2xs); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--fg-subtle); }
+  .tile.dark .cap { color: #7d8e8f; }
+
+  /* Wordmark */
+  .wm {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.14em;
+  }
+  .wm .date { color: var(--coral); }
+  .wm .smash { color: var(--granite); }
+  .tile.dark .wm .smash { color: #cdd8d8; }
+  .wm .dot { color: var(--coral); }
+  .wm.lg { font-size: 44px; }
+  .wm.md { font-size: 30px; }
+
+  /* App-bar lockup */
+  .lockup {
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--coral);
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 18px;
+    color: #fff;
+  }
+  .lockup .name { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: var(--tracking-tight); }
+</style>
+</head>
+<body>
+  <div class="tile">
+    <span class="cap">Primary wordmark</span>
+    <span class="wm lg"><span class="date">Date</span><span class="smash">Smash</span><span class="dot">.</span></span>
+  </div>
+
+  <div class="tile dark">
+    <span class="cap">On dark</span>
+    <span class="wm lg"><span class="date">Date</span><span class="smash">Smash</span><span class="dot">.</span></span>
+  </div>
+
+  <div class="tile">
+    <span class="cap">App-bar lockup</span>
+    <span class="lockup"><span class="mark">D</span><span class="name">Date Smash</span></span>
+  </div>
+
+  <div class="tile">
+    <span class="cap">App icon mark</span>
+    <span class="mark" style="width:56px;height:56px;border-radius:14px;font-size:32px;">D</span>
+  </div>
+</body>
+</html>

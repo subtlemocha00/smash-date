@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html,body{margin:0;}
+  body{font-family:var(--font-body);background:var(--surface);color:var(--fg);padding:20px 26px;}
+  .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #f0f0f0;}
+  .item:first-child{border-top:none;}
+  .cb{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border-strong);flex-shrink:0;display:grid;place-items:center;}
+  .cb.on{background:var(--coral);border-color:var(--coral);color:#fff;font-size:11px;font-weight:800;}
+  .t{flex:1;font-size:14px;}
+  .t.done{color:var(--fg-faint);text-decoration:line-through;}
+  .who{font-size:12px;color:var(--fg-muted);}
+</style>
+</head>
+<body>
+  <div class="item"><span class="cb on">✓</span><span class="t done">Reserve table at Lucia's</span><span class="who">Sam</span></div>
+  <div class="item"><span class="cb"></span><span class="t">Arrange babysitter</span><span class="who">Alex</span></div>
+  <div class="item"><span class="cb"></span><span class="t">Pick up flowers</span><span class="who">Sam</span></div>
+</body>
+</html>

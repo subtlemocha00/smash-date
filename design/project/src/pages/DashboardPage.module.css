@@ -1,0 +1,386 @@
+.page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header {
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notifCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 10px;
+  line-height: 1;
+}
+
+.navLink {
+  font-size: 0.875rem;
+  color: #555;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: #111;
+}
+
+.signOutBtn {
+  font-size: 0.875rem;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  color: #555;
+}
+
+.signOutBtn:hover {
+  background: #f5f5f5;
+}
+
+.main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #e5e5e5;
+}
+
+.groupName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #ef4444;
+  color: #fff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.textBtn {
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.textBtn:hover {
+  color: #111;
+}
+
+.textBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pending Actions */
+
+.pendingList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pendingList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.pendingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  text-decoration: none;
+  color: #111;
+  gap: 1rem;
+}
+
+.pendingRow:hover .pendingTitle {
+  text-decoration: underline;
+}
+
+.pendingTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pendingHint {
+  font-size: 0.775rem;
+  color: #c2410c;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+/* Notifications */
+
+.notifList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notifList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.notifItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+}
+
+.notifUnread .notifBody {
+  font-weight: 500;
+}
+
+.notifBody {
+  font-size: 0.875rem;
+  color: #333;
+  flex: 1;
+  min-width: 0;
+}
+
+.notifLink {
+  color: #333;
+  text-decoration: none;
+}
+
+.notifLink:hover {
+  text-decoration: underline;
+}
+
+.notifTime {
+  font-size: 0.775rem;
+  color: #bbb;
+  flex-shrink: 0;
+}
+
+/* Proposal list */
+
+.newBtn {
+  padding: 0.35rem 0.75rem;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.newBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  font-size: 0.875rem;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  color: #555;
+}
+
+.cancelBtn:hover {
+  background: #f5f5f5;
+}
+
+.newForm {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.newInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.newInput:focus {
+  border-color: #111;
+}
+
+.newFormActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.muted {
+  font-size: 0.875rem;
+  color: #888;
+}
+
+.emptyState {
+  font-size: 0.875rem;
+  color: #555;
+}
+
+.errorMsg {
+  font-size: 0.8rem;
+  color: #b91c1c;
+  margin: 0;
+}
+
+.proposalList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.proposalList li + li {
+  border-top: 1px solid #f0f0f0;
+}
+
+.proposalRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  text-decoration: none;
+  color: #111;
+  gap: 1rem;
+}
+
+.proposalRow:hover .proposalTitle {
+  text-decoration: underline;
+}
+
+.proposalTitle {
+  font-size: 0.9rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposalMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.proposalDate {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status_draft {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status_proposed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status_changes_requested {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.status_accepted {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status_confirmed {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.status_completed {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.status_declined {
+  background: #fee2e2;
+  color: #b91c1c;
+}
