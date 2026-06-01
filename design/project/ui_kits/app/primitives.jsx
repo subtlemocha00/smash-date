@@ -1,4 +1,4 @@
-/* Date Smash UI Kit — shared primitives. Exports to window. */
+/* Smash Date UI Kit — shared primitives. Exports to window. */
 
 function Icon({ name, size = 20, style = {} }) {
   // Lucide renders into <i data-lucide>; createIcons() runs after each commit (see app.jsx)

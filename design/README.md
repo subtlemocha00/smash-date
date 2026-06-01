@@ -18,5 +18,5 @@ The design medium is **HTML/CSS/JS** — these are prototypes, not production co
 
 ## Bundle contents
 
-- `date-smash-design-system/README.md` — this file
-- `date-smash-design-system/project/` — the `Date Smash Design System` project files (HTML prototypes, assets, components)
+* `date-smash-design-system/README.md` — this file
+* `date-smash-design-system/project/` — the `Smash Date Design System` project files (HTML prototypes, assets, components)

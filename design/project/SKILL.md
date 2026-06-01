@@ -1,6 +1,6 @@
 ---
-name: date-smash-design
-description: Use this skill to generate well-branded interfaces and assets for Date Smash, either for production or throwaway prototypes/mocks/etc. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping.
+name: smash-date-design
+description: Use this skill to generate well-branded interfaces and assets for Smash Date, either for production or throwaway prototypes/mocks/etc. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping.
 user-invocable: true
 ---
 
@@ -15,7 +15,7 @@ If the user invokes this skill without any other guidance, ask them what they wa
 - **`colors_and_type.css`** — all design tokens (brand palette, light + dark mode, type scale, spacing, radii, shadows, status colors, semantic element styles). Import this in every artifact and add `class="ds-scope"` (or `data-theme="light|dark"`) to the root.
 - **`assets/`** — the typographic wordmark treatments. Icons are Lucide (CDN).
 - **`preview/`** — small standalone specimen cards (type, color, spacing, components).
-- **`ui_kits/app/`** — an interactive, high-fidelity recreation of the Date Smash PWA with reusable JSX components. Lift components from here for new mocks.
+- **`ui_kits/app/`** — an interactive, high-fidelity recreation of the Smash Date PWA with reusable JSX components. Lift components from here for new mocks.
 - **`src/`** — reference copies of the original codebase CSS/JSX.
 
 ## Quick rules
