@@ -79,6 +79,7 @@ export default function ProposalPage() {
   const [saveError, setSaveError] = useState('')
 
   const [statusError, setStatusError] = useState('')
+  const [statusChanging, setStatusChanging] = useState('')
 
   const [commentText, setCommentText] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
@@ -168,7 +169,7 @@ export default function ProposalPage() {
   }
 
   async function saveEditing() {
-    if (!editFields.title.trim()) return
+    if (saving || !editFields.title.trim()) return
     setSaving(true)
     setSaveError('')
     try {
@@ -199,7 +200,9 @@ export default function ProposalPage() {
   }
 
   async function changeStatus(newStatus) {
+    if (statusChanging) return
     setStatusError('')
+    setStatusChanging(newStatus)
     try {
       await updateProposal(id, { status: newStatus })
       await logActivity(
@@ -219,12 +222,14 @@ export default function ProposalPage() {
       }
     } catch {
       setStatusError('Failed to update status. Please try again.')
+    } finally {
+      setStatusChanging('')
     }
   }
 
   async function submitComment(e) {
     e.preventDefault()
-    if (!commentText.trim()) return
+    if (commentSubmitting || !commentText.trim()) return
     setCommentSubmitting(true)
     setCommentError('')
     try {
@@ -254,7 +259,7 @@ export default function ProposalPage() {
 
   async function submitResponsibility(e) {
     e.preventDefault()
-    if (!respTitle.trim()) return
+    if (respSubmitting || !respTitle.trim()) return
     setRespSubmitting(true)
     setRespError('')
     try {
@@ -451,9 +456,12 @@ export default function ProposalPage() {
                   key={s}
                   className={`${styles.statusBtn} ${styles[`statusBtn_${s}`]}`}
                   onClick={() => changeStatus(s)}
+                  disabled={!!statusChanging}
                   type="button"
                 >
-                  {STATUS_ACTION_LABELS[s] ?? STATUS_LABELS[s]}
+                  {statusChanging === s
+                    ? 'Updating…'
+                    : STATUS_ACTION_LABELS[s] ?? STATUS_LABELS[s]}
                 </button>
               ))}
             </div>
@@ -518,7 +526,7 @@ export default function ProposalPage() {
               type="submit"
               disabled={respSubmitting || !respTitle.trim()}
             >
-              Add
+              {respSubmitting ? 'Adding…' : 'Add'}
             </button>
           </form>
           {respError && <p className={styles.errorMsg}>{respError}</p>}
@@ -571,7 +579,7 @@ export default function ProposalPage() {
               type="submit"
               disabled={commentSubmitting || !commentText.trim()}
             >
-              Post
+              {commentSubmitting ? 'Posting…' : 'Post'}
             </button>
           </form>
           {commentError && <p className={styles.errorMsg}>{commentError}</p>}

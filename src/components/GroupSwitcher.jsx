@@ -31,7 +31,7 @@ export default function GroupSwitcher() {
 
   async function handleCreate(e) {
     e.preventDefault()
-    if (!newName.trim()) return
+    if (busy || !newName.trim()) return
     setBusy(true)
     setError('')
     try {
@@ -54,7 +54,7 @@ export default function GroupSwitcher() {
 
   async function handleJoin(e) {
     e.preventDefault()
-    if (!inviteCode.trim()) return
+    if (busy || !inviteCode.trim()) return
     setBusy(true)
     setError('')
     try {
@@ -63,7 +63,13 @@ export default function GroupSwitcher() {
       setActiveGroup(group.id)
       closeForm()
     } catch (err) {
-      setError(err.message || 'Invalid code. Please check and try again.')
+      // Only surface our own validation messages; never leak a raw Firebase error.
+      const known = ['Invalid invite code', 'Group not found']
+      setError(
+        known.includes(err?.message)
+          ? err.message
+          : 'Couldn’t join group. Please check the code and try again.'
+      )
     } finally {
       setBusy(false)
     }

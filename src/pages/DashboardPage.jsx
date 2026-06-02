@@ -42,10 +42,12 @@ export default function DashboardPage() {
 
   const [proposals, setProposals] = useState([])
   const [proposalsLoading, setProposalsLoading] = useState(true)
+  const [proposalsError, setProposalsError] = useState('')
 
   const [notifications, setNotifications] = useState([])
   const [notifLoading, setNotifLoading] = useState(true)
   const [markingAllRead, setMarkingAllRead] = useState(false)
+  const [notifCollapsed, setNotifCollapsed] = useState(false)
 
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
@@ -59,10 +61,18 @@ export default function DashboardPage() {
       return
     }
     setProposalsLoading(true)
-    const unsub = subscribeToGroupProposals(activeGroupId, (list) => {
-      setProposals(list)
-      setProposalsLoading(false)
-    })
+    setProposalsError('')
+    const unsub = subscribeToGroupProposals(
+      activeGroupId,
+      (list) => {
+        setProposals(list)
+        setProposalsLoading(false)
+      },
+      () => {
+        setProposalsError('Couldn’t load proposals. Check your connection and try again.')
+        setProposalsLoading(false)
+      }
+    )
     return unsub
   }, [activeGroupId])
 
@@ -93,6 +103,7 @@ export default function DashboardPage() {
 
   async function handleCreateProposal(e) {
     e.preventDefault()
+    if (creating) return
     if (!newTitle.trim() || !activeGroupId) return
     setCreating(true)
     setCreateError('')
@@ -199,13 +210,24 @@ export default function DashboardPage() {
         {/* Notifications */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>
-              Notifications
-              {unreadCount > 0 && (
-                <span className={styles.sectionBadge}>{unreadCount} new</span>
-              )}
-            </h2>
-            {unreadCount > 0 && (
+            <button
+              className={styles.collapseToggle}
+              onClick={() => setNotifCollapsed((c) => !c)}
+              aria-expanded={!notifCollapsed}
+              type="button"
+            >
+              <span
+                className={`${styles.collapseChevron} ${notifCollapsed ? styles.collapseChevronClosed : ''}`}
+                aria-hidden="true"
+              />
+              <span className={styles.sectionTitle}>
+                Notifications
+                {unreadCount > 0 && (
+                  <span className={styles.sectionBadge}>{unreadCount} new</span>
+                )}
+              </span>
+            </button>
+            {!notifCollapsed && unreadCount > 0 && (
               <button
                 className={styles.textBtn}
                 onClick={handleMarkAllRead}
@@ -216,34 +238,36 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
-          {notifLoading ? (
-            <p className={styles.muted}>Loading…</p>
-          ) : groupNotifications.length === 0 ? (
-            <p className={styles.muted}>You&apos;re all caught up.</p>
-          ) : (
-            <ul className={styles.notifList}>
-              {groupNotifications.slice(0, 5).map((n) => (
-                <li
-                  key={n.id}
-                  className={`${styles.notifItem} ${!n.read ? styles.notifUnread : ''}`}
-                >
-                  <span className={styles.notifBody}>
-                    {n.proposalId ? (
-                      <Link
-                        to={`/proposal/${n.proposalId}`}
-                        className={styles.notifLink}
-                        onClick={() => !n.read && markNotificationRead(n.id)}
-                      >
-                        {n.message}
-                      </Link>
-                    ) : (
-                      n.message
-                    )}
-                  </span>
-                  <span className={styles.notifTime}>{formatDate(n.createdAt)}</span>
-                </li>
-              ))}
-            </ul>
+          {!notifCollapsed && (
+            notifLoading ? (
+              <p className={styles.muted}>Loading…</p>
+            ) : groupNotifications.length === 0 ? (
+              <p className={styles.muted}>You&apos;re all caught up.</p>
+            ) : (
+              <ul className={styles.notifList}>
+                {groupNotifications.slice(0, 5).map((n) => (
+                  <li
+                    key={n.id}
+                    className={`${styles.notifItem} ${!n.read ? styles.notifUnread : ''}`}
+                  >
+                    <span className={styles.notifBody}>
+                      {n.proposalId ? (
+                        <Link
+                          to={`/proposal/${n.proposalId}`}
+                          className={styles.notifLink}
+                          onClick={() => !n.read && markNotificationRead(n.id)}
+                        >
+                          {n.message}
+                        </Link>
+                      ) : (
+                        n.message
+                      )}
+                    </span>
+                    <span className={styles.notifTime}>{formatDate(n.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )
           )}
         </section>
 
@@ -291,6 +315,8 @@ export default function DashboardPage() {
 
           {proposalsLoading ? (
             <p className={styles.muted}>Loading…</p>
+          ) : proposalsError ? (
+            <p className={styles.errorMsg}>{proposalsError}</p>
           ) : proposals.length === 0 ? (
             <p className={styles.emptyState}>Create your first date idea.</p>
           ) : (

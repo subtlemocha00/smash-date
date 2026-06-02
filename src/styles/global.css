@@ -25,6 +25,11 @@
   --azure-050: #eef1fe;
 
   --chartreuse-700: #6f8a00;
+  --chartreuse-600: #a6cf07;
+  --chartreuse-500: #bced09;
+  --chartreuse-200: #e3f29a;
+  --chartreuse-100: #eef8c8;
+  --chartreuse-050: #f7fbe6;
   --green-600: #5a9a16;
   --green-100: #e7f4cf;
   --green-050: #f4f9e6;
@@ -103,15 +108,15 @@
   --fg-subtle: #8a9899;
   --fg-faint: #b3bebe;
 
-  --primary: var(--coral-500);
-  --primary-hover: var(--coral-600);
-  --primary-press: var(--coral-700);
-  --on-primary: #ffffff;
-  --primary-soft-bg: var(--coral-050);
-  --primary-soft-fg: var(--coral-700);
+  --primary: var(--chartreuse-500);
+  --primary-hover: var(--chartreuse-600);
+  --primary-press: var(--chartreuse-700);
+  --on-primary: #1b2425;
+  --primary-soft-bg: var(--chartreuse-050);
+  --primary-soft-fg: var(--chartreuse-700);
 
   --link: var(--azure);
-  --focus-ring: color-mix(in oklch, var(--coral) 55%, transparent);
+  --focus-ring: color-mix(in oklch, var(--chartreuse) 55%, transparent);
 
   --shadow-sm: 0 1px 2px rgba(27, 36, 37, 0.06);
   --shadow: 0 1px 4px rgba(27, 36, 37, 0.08);
@@ -157,15 +162,15 @@
   --fg-subtle: #7d8e8f;
   --fg-faint: #5d6e6f;
 
-  --primary: var(--coral-500);
-  --primary-hover: #ff8472;
-  --primary-press: #ff9586;
-  --on-primary: #2a1009;
-  --primary-soft-bg: color-mix(in oklch, var(--coral) 16%, var(--surface));
-  --primary-soft-fg: #ffae9f;
+  --primary: var(--chartreuse-500);
+  --primary-hover: #cbe86a;
+  --primary-press: #d6f08a;
+  --on-primary: #1b2425;
+  --primary-soft-bg: color-mix(in oklch, var(--chartreuse) 16%, var(--surface));
+  --primary-soft-fg: #cbe86a;
 
   --link: #8ea3ff;
-  --focus-ring: color-mix(in oklch, var(--coral) 60%, transparent);
+  --focus-ring: color-mix(in oklch, var(--chartreuse) 60%, transparent);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
@@ -207,11 +212,11 @@
     --fg-muted: #a4b3b3;
     --fg-subtle: #7d8e8f;
     --fg-faint: #5d6e6f;
-    --primary-hover: #ff8472;
-    --primary-press: #ff9586;
-    --on-primary: #2a1009;
-    --primary-soft-bg: color-mix(in oklch, var(--coral) 16%, #1f2829);
-    --primary-soft-fg: #ffae9f;
+    --primary-hover: #cbe86a;
+    --primary-press: #d6f08a;
+    --on-primary: #1b2425;
+    --primary-soft-bg: color-mix(in oklch, var(--chartreuse) 16%, #1f2829);
+    --primary-soft-fg: #cbe86a;
     --link: #8ea3ff;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 4px rgba(0, 0, 0, 0.45);

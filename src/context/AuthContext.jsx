@@ -34,6 +34,17 @@ export function AuthProvider({ children }) {
           }
         } catch (err) {
           console.error('Failed to load user profile:', err)
+          // Don't strand the user on a blank screen if the profile can't be
+          // read or created (transient network / rules issue). Fall back to a
+          // minimal in-memory profile so the app still renders; the groups
+          // listener loads independently of this.
+          setUserProfile({
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName || '',
+            email: firebaseUser.email,
+            groupId: null,
+            activeGroupId: null
+          })
         }
       } else {
         setUser(null)

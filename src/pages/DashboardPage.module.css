@@ -30,7 +30,7 @@
 }
 
 .logoAccent {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .logoBase {
@@ -38,7 +38,7 @@
 }
 
 .logoDot {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .headerRight {
@@ -54,8 +54,8 @@
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: var(--coral);
-  color: #fff;
+  background: var(--chartreuse);
+  color: #1b2425;
   font-size: 10px;
   font-weight: var(--weight-bold);
   border-radius: var(--radius-pill);
@@ -130,12 +130,40 @@
   gap: 8px;
 }
 
+.collapseToggle {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+}
+
+.collapseChevron {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--fg-muted);
+  border-bottom: 2px solid var(--fg-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.collapseChevronClosed {
+  transform: rotate(-45deg);
+}
+
 .sectionBadge {
   font-size: 11px;
   font-weight: var(--weight-bold);
   line-height: 1;
-  background: var(--coral);
-  color: #fff;
+  background: var(--chartreuse);
+  color: #1b2425;
   padding: 3px 7px;
   border-radius: var(--radius-pill);
 }
@@ -186,7 +214,7 @@
 }
 
 .pendingRow:hover .pendingTitle {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .pendingTitle {
@@ -201,7 +229,7 @@
 
 .pendingHint {
   font-size: 12px;
-  color: var(--coral-700);
+  color: var(--chartreuse-700);
   flex-shrink: 0;
   font-weight: var(--weight-medium);
 }
@@ -380,7 +408,7 @@
 }
 
 .proposalRow:hover .proposalTitle {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .proposalTitle {

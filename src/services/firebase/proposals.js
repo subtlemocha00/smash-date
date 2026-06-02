@@ -37,18 +37,22 @@ export async function updateProposal(proposalId, fields) {
   })
 }
 
-export function subscribeToGroupProposals(groupId, callback) {
+export function subscribeToGroupProposals(groupId, callback, onError) {
   const q = query(collection(db, 'proposals'), where('groupId', '==', groupId))
-  return onSnapshot(q, (snap) => {
-    const proposals = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => {
-        const at = a.updatedAt?.toMillis?.() ?? 0
-        const bt = b.updatedAt?.toMillis?.() ?? 0
-        return bt - at
-      })
-    callback(proposals)
-  })
+  return onSnapshot(
+    q,
+    (snap) => {
+      const proposals = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const at = a.updatedAt?.toMillis?.() ?? 0
+          const bt = b.updatedAt?.toMillis?.() ?? 0
+          return bt - at
+        })
+      callback(proposals)
+    },
+    onError ?? (() => {})
+  )
 }
 
 export function subscribeToProposal(proposalId, callback, onError) {

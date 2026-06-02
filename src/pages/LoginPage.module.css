@@ -24,7 +24,7 @@
 }
 
 .wordmarkAccent {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .wordmarkBase {
@@ -32,7 +32,7 @@
 }
 
 .wordmarkDot {
-  color: var(--coral);
+  color: var(--chartreuse);
 }
 
 .card {
@@ -67,7 +67,7 @@
 .activeTab {
   color: var(--fg);
   font-weight: var(--weight-semibold);
-  border-bottom-color: var(--coral);
+  border-bottom-color: var(--chartreuse);
 }
 
 .form {

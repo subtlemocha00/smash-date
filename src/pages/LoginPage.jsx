@@ -18,13 +18,18 @@ export default function LoginPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (submitting) return
+    if (mode === 'register' && !displayName.trim()) {
+      setError('Please enter your name.')
+      return
+    }
     setError('')
     setSubmitting(true)
     try {
       if (mode === 'login') {
         await signInWithEmail(email, password)
       } else {
-        await registerWithEmail(email, password, displayName)
+        await registerWithEmail(email, password, displayName.trim())
       }
     } catch (err) {
       setError(formatAuthError(err.code))
@@ -33,6 +38,7 @@ export default function LoginPage() {
   }
 
   async function handleGoogle() {
+    if (submitting) return
     setError('')
     setSubmitting(true)
     try {

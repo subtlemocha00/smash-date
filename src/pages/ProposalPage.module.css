@@ -340,8 +340,13 @@
   transition: background 0.12s ease;
 }
 
-.statusBtn:hover {
+.statusBtn:hover:not(:disabled) {
   background: var(--surface-2);
+}
+
+.statusBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .statusBtn_proposed {
@@ -413,7 +418,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: var(--coral);
+  accent-color: var(--chartreuse);
 }
 
 .respTitle {
