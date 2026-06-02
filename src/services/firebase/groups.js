@@ -17,7 +17,10 @@ import {
 import { db } from './firestore'
 
 function generateInviteCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase()
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('')
 }
 
 export async function createGroup(userId, groupName) {

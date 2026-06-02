@@ -12,10 +12,6 @@ service cloud.firestore {
           get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
     }
 
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
     function isGroupCreator(groupId) {
       let g = get(/databases/$(database)/documents/groups/$(groupId)).data;
       // Legacy groups predate createdBy; any member may manage them.
@@ -56,6 +52,10 @@ service cloud.firestore {
         );
     }
 
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /groups/{groupId} {
       // Test the document directly (not via get()) so this is also valid for the
       // "memberIds array-contains uid" collection query the dashboard runs.
@@ -73,47 +73,88 @@ service cloud.firestore {
     }
 
     match /groupInvites/{code} {
+      // Anyone authenticated can read an invite by its code (required to join).
       allow read: if isAuth();
-      allow create: if isAuth();
+      // Only the group creator may publish an invite for their group.
+      // FIX (HIGH): was `if isAuth()` — allowed any user to create invites for groups they don't own.
+      allow create: if isGroupCreator(request.resource.data.groupId);
       // Only the owner of the referenced group may remove its invite.
       allow delete: if isGroupCreator(resource.data.groupId);
     }
 
     match /proposals/{proposalId} {
-      allow read, update, delete: if isGroupMember(resource.data.groupId);
+      allow read: if isGroupMember(resource.data.groupId);
+      // Only group members may create proposals.
       allow create: if isAuth() && isGroupMember(request.resource.data.groupId);
+      // Members may update proposal fields, but groupId is immutable after creation.
+      // FIX (MEDIUM): was `allow read, update, delete` with no field constraints — groupId could be changed.
+      allow update: if isGroupMember(resource.data.groupId)
+        && request.resource.data.groupId == resource.data.groupId;
+      allow delete: if isGroupMember(resource.data.groupId);
     }
 
     match /comments/{commentId} {
-      allow read, update, delete: if isGroupMember(
+      allow read: if isGroupMember(
         get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
       allow create: if isAuth() && isGroupMember(
         get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
+      );
+      // Members may update comment content, but proposalId and userId are immutable.
+      // FIX (MEDIUM): was merged with read/delete — no field constraints on update.
+      allow update: if isGroupMember(
+          get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+        )
+        && request.resource.data.proposalId == resource.data.proposalId
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isGroupMember(
+        get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
     }
 
     match /responsibilities/{responsibilityId} {
-      allow read, update, delete: if isGroupMember(
+      allow read: if isGroupMember(
         get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
       allow create: if isAuth() && isGroupMember(
         get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
+      );
+      // Members may update responsibility fields, but proposalId is immutable.
+      // FIX (MEDIUM): was merged with read/delete — proposalId could be changed to move data between proposals.
+      allow update: if isGroupMember(
+          get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+        )
+        && request.resource.data.proposalId == resource.data.proposalId;
+      allow delete: if isGroupMember(
+        get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
     }
 
     match /activityEvents/{eventId} {
-      allow read, delete: if isGroupMember(
+      // Activity events are append-only audit logs — no update rule.
+      allow read: if isGroupMember(
         get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
       allow create: if isAuth() && isGroupMember(
         get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
       );
+      // Only the group creator may delete individual activity events.
+      // Batch deletion via deleteGroup() is also initiated by the creator, so
+      // Firestore evaluates this against pre-commit state where the group still exists.
+      // FIX (MEDIUM): was `isGroupMember` — any member could delete audit log entries.
+      allow delete: if isGroupCreator(
+        get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+      );
     }
 
     match /notifications/{notificationId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if isAuth();
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      // Only group members may create notifications referencing their group.
+      // FIX (HIGH): was `if isAuth()` — any user could spam notifications to any other user.
+      allow create: if isAuth()
+        && isGroupMember(request.resource.data.groupId)
+        && request.resource.data.userId != null;
     }
   }
 }
