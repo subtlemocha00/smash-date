@@ -703,3 +703,196 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Field-level voting */
+
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editField + .editField {
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+}
+
+.votingToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.votingHint {
+  font-size: 13px;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.votingBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.votingResolved {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lockedBadge {
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--st-confirmed-bg);
+  color: var(--st-confirmed-fg);
+}
+
+.optionList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.optionValue {
+  font-size: 14px;
+  color: var(--fg);
+  flex: 1;
+  min-width: 0;
+}
+
+.optionCount {
+  font-size: 12px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.voteBtn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.6rem;
+  min-height: 28px;
+  cursor: pointer;
+  color: var(--fg);
+  flex-shrink: 0;
+  transition: background 0.12s ease;
+}
+
+.voteBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.voteBtnActive {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+}
+
+.voteBtnActive:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.voteBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pickBtn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+}
+
+.pickBtn:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.pickBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.optionAddForm {
+  display: flex;
+  gap: 8px;
+}
+
+.optionInput {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  padding: 0.4rem 0.6rem;
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+}
+
+.optionInput:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.creatorControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lockBtn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.7rem;
+  min-height: 30px;
+  cursor: pointer;
+  color: var(--fg);
+  transition: background 0.12s ease;
+}
+
+.lockBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.lockBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tieNote {
+  font-size: 12.5px;
+  color: var(--danger);
+}

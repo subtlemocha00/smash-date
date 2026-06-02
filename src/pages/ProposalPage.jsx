@@ -9,7 +9,17 @@ import {
   setProposalArchivedForUser,
   deleteProposal,
   isAutoArchived,
-  isArchivedForUser
+  isArchivedForUser,
+  VOTABLE_FIELDS,
+  computeVotingChanges,
+  isFieldVotingEnabled,
+  isFieldVotingActive,
+  getLeaders,
+  castVote,
+  addFieldOption,
+  lockFieldToLeader,
+  resolveFieldTo,
+  lockProposalVoting
 } from '../services/firebase/proposals'
 import { addComment, subscribeToComments } from '../services/firebase/comments'
 import {
@@ -54,6 +64,19 @@ const STATUS_ACTION_LABELS = {
   declined: 'Decline'
 }
 
+// Detail fields in display order. `votable` fields can opt into field-level
+// voting; the rest stay plain text. Order/labels match the original layout.
+const FIELDS = [
+  { key: 'description', label: 'Description', multiline: true, votable: false },
+  { key: 'date', label: 'Date', type: 'date', votable: true },
+  { key: 'time', label: 'Time', type: 'time', votable: true },
+  { key: 'activity', label: 'Activity', votable: true },
+  { key: 'location', label: 'Restaurant / Location', votable: true },
+  { key: 'childcareNotes', label: 'Childcare Notes', votable: true },
+  { key: 'budget', label: 'Budget', votable: true },
+  { key: 'notes', label: 'Notes', multiline: true, votable: false }
+]
+
 function formatTime(ts) {
   if (!ts?.toDate) return ''
   return ts.toDate().toLocaleString('en-US', {
@@ -81,9 +104,13 @@ export default function ProposalPage() {
 
   const [editing, setEditing] = useState(false)
   const [editFields, setEditFields] = useState({})
+  const [votingToggles, setVotingToggles] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState('')
+
+  const [lockingProposal, setLockingProposal] = useState(false)
+  const [lockMessage, setLockMessage] = useState('')
 
   const [statusError, setStatusError] = useState('')
   const [statusChanging, setStatusChanging] = useState('')
@@ -169,6 +196,11 @@ export default function ProposalPage() {
       budget: proposal.budget || '',
       notes: proposal.notes || ''
     })
+    const toggles = {}
+    VOTABLE_FIELDS.forEach((f) => {
+      toggles[f] = isFieldVotingEnabled(proposal, f)
+    })
+    setVotingToggles(toggles)
     setSaveSuccess(false)
     setSaveError('')
     setEditing(true)
@@ -185,7 +217,8 @@ export default function ProposalPage() {
     setSaving(true)
     setSaveError('')
     try {
-      await updateProposal(id, editFields)
+      const votingChanges = computeVotingChanges(proposal, editFields, votingToggles)
+      await updateProposal(id, { ...editFields, ...votingChanges })
       await logActivity(
         id,
         'fields_updated',
@@ -262,6 +295,49 @@ export default function ProposalPage() {
     } catch {
       setActionError('Failed to delete. Please try again.')
       setDeleting(false)
+    }
+  }
+
+  // Voting handlers read the latest options straight from proposal state (kept
+  // current by the realtime listener), so the VotingField only passes ids/values.
+  async function handleVote(field, optionId) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await castVote(id, field, optionId, user.uid, options, memberIds)
+  }
+
+  async function handleAddOption(field, value) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await addFieldOption(id, field, value, options)
+  }
+
+  async function handleLockField(field) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await lockFieldToLeader(id, field, options)
+  }
+
+  async function handlePickWinner(field, optionId) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await resolveFieldTo(id, field, optionId, options)
+  }
+
+  async function handleLockProposal() {
+    if (lockingProposal) return
+    setLockingProposal(true)
+    setLockMessage('')
+    try {
+      const unresolved = await lockProposalVoting(id, proposal)
+      if (unresolved.length > 0) {
+        const labels = unresolved
+          .map((f) => FIELDS.find((x) => x.key === f)?.label ?? f)
+          .join(', ')
+        setLockMessage(`Pick a winner to finish locking: ${labels}.`)
+      } else {
+        setLockMessage('All voting fields locked.')
+      }
+    } catch {
+      setLockMessage('Failed to lock voting. Please try again.')
+    } finally {
+      setLockingProposal(false)
     }
   }
 
@@ -359,6 +435,7 @@ export default function ProposalPage() {
   const archivedForMe = isArchivedForUser(proposal, user.uid)
   const manuallyArchived = (proposal.archivedByUserIds ?? []).includes(user.uid)
   const isCreator = proposal.createdBy === user.uid
+  const hasActiveVoting = VOTABLE_FIELDS.some((f) => isFieldVotingActive(proposal, f))
 
   return (
     <div className={styles.page}>
@@ -421,73 +498,63 @@ export default function ProposalPage() {
           {saveError && <p className={styles.errorMsg}>{saveError}</p>}
 
           <div className={styles.fields}>
-            {editing ? (
-              <>
-                <FieldInput
-                  label="Description"
-                  name="description"
-                  value={editFields.description}
-                  multiline
-                  onChange={(v) => setEditFields((f) => ({ ...f, description: v }))}
-                />
-                <FieldInput
-                  label="Date"
-                  name="date"
-                  type="date"
-                  value={editFields.date}
-                  onChange={(v) => setEditFields((f) => ({ ...f, date: v }))}
-                />
-                <FieldInput
-                  label="Time"
-                  name="time"
-                  type="time"
-                  value={editFields.time}
-                  onChange={(v) => setEditFields((f) => ({ ...f, time: v }))}
-                />
-                <FieldInput
-                  label="Activity"
-                  name="activity"
-                  value={editFields.activity}
-                  onChange={(v) => setEditFields((f) => ({ ...f, activity: v }))}
-                />
-                <FieldInput
-                  label="Restaurant / Location"
-                  name="location"
-                  value={editFields.location}
-                  onChange={(v) => setEditFields((f) => ({ ...f, location: v }))}
-                />
-                <FieldInput
-                  label="Childcare Notes"
-                  name="childcareNotes"
-                  value={editFields.childcareNotes}
-                  onChange={(v) => setEditFields((f) => ({ ...f, childcareNotes: v }))}
-                />
-                <FieldInput
-                  label="Budget"
-                  name="budget"
-                  value={editFields.budget}
-                  onChange={(v) => setEditFields((f) => ({ ...f, budget: v }))}
-                />
-                <FieldInput
-                  label="Notes"
-                  name="notes"
-                  value={editFields.notes}
-                  multiline
-                  onChange={(v) => setEditFields((f) => ({ ...f, notes: v }))}
-                />
-              </>
-            ) : (
-              <>
-                <FieldView label="Description" value={proposal.description} />
-                <FieldView label="Date" value={proposal.date} />
-                <FieldView label="Time" value={proposal.time} />
-                <FieldView label="Activity" value={proposal.activity} />
-                <FieldView label="Restaurant / Location" value={proposal.location} />
-                <FieldView label="Childcare Notes" value={proposal.childcareNotes} />
-                <FieldView label="Budget" value={proposal.budget} />
-                <FieldView label="Notes" value={proposal.notes} />
-              </>
-            )}
+            {editing
+              ? FIELDS.map((f) => {
+                  const votingOn = f.votable && votingToggles[f.key]
+                  return (
+                    <div key={f.key} className={styles.editField}>
+                      {f.votable && isCreator && (
+                        <label className={styles.votingToggle}>
+                          <input
+                            type="checkbox"
+                            checked={!!votingToggles[f.key]}
+                            onChange={(e) =>
+                              setVotingToggles((t) => ({ ...t, [f.key]: e.target.checked }))
+                            }
+                          />
+                          Let members vote on {f.label.toLowerCase()}
+                        </label>
+                      )}
+                      {votingOn ? (
+                        <div className={styles.fieldRow}>
+                          <span className={styles.fieldLabel}>{f.label}</span>
+                          <span className={styles.votingHint}>
+                            Members vote to decide this field.
+                          </span>
+                        </div>
+                      ) : (
+                        <FieldInput
+                          label={f.label}
+                          name={f.key}
+                          type={f.type}
+                          multiline={f.multiline}
+                          value={editFields[f.key]}
+                          onChange={(v) => setEditFields((s) => ({ ...s, [f.key]: v }))}
+                        />
+                      )}
+                    </div>
+                  )
+                })
+              : FIELDS.map((f) =>
+                  f.votable && isFieldVotingEnabled(proposal, f.key) ? (
+                    <VotingField
+                      key={f.key}
+                      label={f.label}
+                      field={f.key}
+                      inputType={f.type}
+                      voting={proposal.voting[f.key]}
+                      resolvedValue={proposal[f.key]}
+                      userId={user.uid}
+                      isCreator={isCreator}
+                      onVote={handleVote}
+                      onAddOption={handleAddOption}
+                      onLock={handleLockField}
+                      onPick={handlePickWinner}
+                    />
+                  ) : (
+                    <FieldView key={f.key} label={f.label} value={proposal[f.key]} />
+                  )
+                )}
           </div>
         </section>
 
@@ -630,9 +697,27 @@ export default function ProposalPage() {
           {commentError && <p className={styles.errorMsg}>{commentError}</p>}
         </section>
 
-        {/* Manage (archive / delete) */}
+        {/* Manage (voting / archive / delete) */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Manage</h2>
+
+          {isCreator && hasActiveVoting && (
+            <div className={styles.manageRow}>
+              <button
+                className={styles.manageBtn}
+                onClick={handleLockProposal}
+                disabled={lockingProposal}
+                type="button"
+              >
+                {lockingProposal ? 'Locking…' : 'Finalize voting (lock all fields)'}
+              </button>
+              <span className={styles.manageHint}>
+                Locks each field to its winning option.
+              </span>
+            </div>
+          )}
+          {lockMessage && <p className={styles.manageNote}>{lockMessage}</p>}
+
           <div className={styles.manageRow}>
             {autoArchived ? (
               <p className={styles.manageNote}>
@@ -740,6 +825,145 @@ function FieldInput({ label, name, value, onChange, type = 'text', multiline = f
           onChange={(e) => onChange(e.target.value)}
         />
       )}
+    </div>
+  )
+}
+
+function VotingField({
+  label,
+  field,
+  inputType = 'text',
+  voting,
+  resolvedValue,
+  userId,
+  isCreator,
+  onVote,
+  onAddOption,
+  onLock,
+  onPick
+}) {
+  const [newOption, setNewOption] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const options = voting.options ?? []
+  const locked = !!voting.votingLocked
+  const leaders = getLeaders(options)
+  const uniqueLeader = leaders.length === 1 ? leaders[0] : null
+
+  async function run(action) {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await action()
+    } catch {
+      setError('Action failed. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className={styles.fieldRow}>
+      <span className={styles.fieldLabel}>{label}</span>
+      <div className={styles.votingBox}>
+        {locked ? (
+          <div className={styles.votingResolved}>
+            <span className={resolvedValue ? styles.fieldValue : styles.fieldEmpty}>
+              {resolvedValue || '—'}
+            </span>
+            <span className={styles.lockedBadge}>Locked</span>
+          </div>
+        ) : (
+          <span className={styles.votingHint}>Vote to decide this field.</span>
+        )}
+
+        <ul className={styles.optionList}>
+          {options.length === 0 && (
+            <li className={styles.fieldEmpty}>No options yet — add one below.</li>
+          )}
+          {options.map((o) => {
+            const voted = (o.votes ?? []).includes(userId)
+            const count = (o.votes ?? []).length
+            return (
+              <li key={o.id} className={styles.optionRow}>
+                {!locked && (
+                  <button
+                    type="button"
+                    className={`${styles.voteBtn} ${voted ? styles.voteBtnActive : ''}`}
+                    onClick={() => run(() => onVote(field, o.id))}
+                    disabled={busy}
+                  >
+                    {voted ? '✓ Voted' : 'Vote'}
+                  </button>
+                )}
+                <span className={styles.optionValue}>{o.value}</span>
+                <span className={styles.optionCount}>
+                  {count} {count === 1 ? 'vote' : 'votes'}
+                </span>
+                {isCreator && !locked && (
+                  <button
+                    type="button"
+                    className={styles.pickBtn}
+                    onClick={() => run(() => onPick(field, o.id))}
+                    disabled={busy}
+                  >
+                    Pick winner
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+
+        {!locked && (
+          <form
+            className={styles.optionAddForm}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!newOption.trim()) return
+              run(async () => {
+                await onAddOption(field, newOption.trim())
+                setNewOption('')
+              })
+            }}
+          >
+            <input
+              className={styles.optionInput}
+              type={inputType}
+              placeholder={inputType === 'text' ? `Add a ${label.toLowerCase()} option` : undefined}
+              value={newOption}
+              onChange={(e) => setNewOption(e.target.value)}
+              disabled={busy}
+            />
+            <button className={styles.addBtn} type="submit" disabled={busy || !newOption.trim()}>
+              Add
+            </button>
+          </form>
+        )}
+
+        {isCreator && !locked && (
+          <div className={styles.creatorControls}>
+            {uniqueLeader ? (
+              <button
+                type="button"
+                className={styles.lockBtn}
+                onClick={() => run(() => onLock(field))}
+                disabled={busy}
+              >
+                Lock field (winner: {uniqueLeader.value})
+              </button>
+            ) : leaders.length > 1 ? (
+              <span className={styles.tieNote}>Tie — use “Pick winner” to break it.</span>
+            ) : options.length > 0 ? (
+              <span className={styles.tieNote}>No votes yet — “Pick winner” to set manually.</span>
+            ) : null}
+          </div>
+        )}
+
+        {error && <p className={styles.errorMsg}>{error}</p>}
+      </div>
     </div>
   )
 }
