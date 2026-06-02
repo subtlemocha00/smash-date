@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useGroups } from '../context/GroupContext'
 import { logOut } from '../services/firebase/auth'
 import GroupSwitcher from '../components/GroupSwitcher'
+import GroupImage from '../components/GroupImage'
 import {
   createProposal,
   subscribeToGroupProposals,
@@ -185,6 +186,9 @@ export default function DashboardPage() {
       </header>
 
       <main className={styles.main}>
+        {/* Group photo (creator-managed; hidden for non-creators when absent) */}
+        <GroupImage />
+
         {/* Group info + switcher */}
         <section className={styles.section}>
           {groupsLoading ? (

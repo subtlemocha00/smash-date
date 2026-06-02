@@ -14,7 +14,9 @@ import {
   arrayUnion,
   arrayRemove
 } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db } from './firestore'
+import { storage } from './storage'
 
 function generateInviteCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -30,6 +32,7 @@ export async function createGroup(userId, groupName) {
     memberIds: [userId],
     createdBy: userId,
     inviteCode,
+    groupImageUrl: null,
     createdAt: serverTimestamp()
   })
   await setDoc(doc(db, 'groupInvites', inviteCode), { groupId: groupRef.id })
@@ -140,4 +143,43 @@ export async function deleteGroup(groupId, inviteCode) {
   if (inviteCode) batch.delete(doc(db, 'groupInvites', inviteCode))
   batch.delete(doc(db, 'groups', groupId))
   await batch.commit()
+}
+
+// One image per group, stored at a fixed path so each upload overwrites the
+// previous file — no orphans accumulate and no extra "path" field is needed.
+// Overwriting yields a fresh download token, so the new URL busts any cache.
+//
+// The group creator's uid is part of the path. Storage rules enforce
+// creator-only writes by comparing request.auth.uid to that path segment, which
+// avoids a cross-service Firestore lookup (unreliable in some projects).
+function groupImageRef(groupId, ownerUid) {
+  return ref(storage, `groupImages/${groupId}/${ownerUid}/profile`)
+}
+
+// Creator-only (enforced by Storage rules via the ownerUid path segment, and by
+// Firestore rules on the groupImageUrl write). Pass the group's createdBy uid as
+// ownerUid. Uploads the file, records the resulting URL, and returns it.
+export async function uploadGroupImage(groupId, ownerUid, file) {
+  const imageRef = groupImageRef(groupId, ownerUid)
+  await uploadBytes(imageRef, file, { contentType: file.type })
+  const url = await getDownloadURL(imageRef)
+  await updateDoc(doc(db, 'groups', groupId), { groupImageUrl: url })
+  return url
+}
+
+// Creator-only. Removes the storage file and clears the URL. Tolerates an
+// already-missing file so a stale pointer can still be cleared.
+export async function removeGroupImage(groupId, ownerUid) {
+  try {
+    await deleteObject(groupImageRef(groupId, ownerUid))
+  } catch (err) {
+    if (err?.code !== 'storage/object-not-found') throw err
+  }
+  await updateDoc(doc(db, 'groups', groupId), { groupImageUrl: null, groupImagePosition: null })
+}
+
+// Creator-only. Stores the image focal point as a CSS object-position string
+// (e.g. "50% 30%") on the group so every member sees the same framing.
+export async function setGroupImagePosition(groupId, position) {
+  await updateDoc(doc(db, 'groups', groupId), { groupImagePosition: position })
 }
