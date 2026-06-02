@@ -208,7 +208,9 @@ export default function DashboardPage() {
         {/* Needs Attention */}
         {!proposalsLoading && pendingActions.length > 0 && (
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Needs Attention</h2>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Needs Attention</h2>
+            </div>
             <ul className={styles.pendingList}>
               {pendingActions.map((p) => (
                 <li key={p.id}>

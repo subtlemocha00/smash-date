@@ -92,15 +92,15 @@
   font-size: 14px;
   font-weight: var(--weight-medium);
   background: var(--surface);
-  border: 1px solid var(--coral-200);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.95rem;
   min-height: 38px;
   cursor: pointer;
-  color: var(--coral-700);
+  color: var(--fg);
   transition: background 0.12s ease;
 }
 
 .signOutBtn:hover {
-  background: var(--coral-050);
+  background: var(--surface-2);
 }

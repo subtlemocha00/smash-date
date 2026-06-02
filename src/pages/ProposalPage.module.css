@@ -694,7 +694,10 @@
   color: #fff;
 }
 
-.deleteBtn:hover:not(:disabled),
+.deleteBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
 .deleteConfirmBtn:hover:not(:disabled) {
   opacity: 0.85;
 }

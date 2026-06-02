@@ -74,7 +74,7 @@ export default function GroupManager() {
     try {
       await renameGroup(activeGroup.id, trimmed)
     } catch {
-      setRenameError('Failed to rename group.')
+      setRenameError('Failed to rename group. Please try again.')
     } finally {
       setRenaming(false)
     }
@@ -86,7 +86,7 @@ export default function GroupManager() {
     try {
       await removeMember(activeGroup.id, uid)
     } catch {
-      setRemoveError('Failed to remove member.')
+      setRemoveError('Failed to remove member. Please try again.')
     } finally {
       setRemovingId('')
     }
@@ -104,7 +104,7 @@ export default function GroupManager() {
       // The realtime listener drops the group and the context selects another
       // (or none); no manual navigation needed.
     } catch {
-      setDeleteError('Failed to delete group.')
+      setDeleteError('Failed to delete group. Please try again.')
     } finally {
       setDeleting(false)
     }
