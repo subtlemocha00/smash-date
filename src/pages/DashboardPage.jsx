@@ -4,7 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import { useGroups } from '../context/GroupContext'
 import { logOut } from '../services/firebase/auth'
 import GroupSwitcher from '../components/GroupSwitcher'
-import { createProposal, subscribeToGroupProposals } from '../services/firebase/proposals'
+import {
+  createProposal,
+  subscribeToGroupProposals,
+  isArchivedForUser
+} from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
 import {
   subscribeToUserNotifications,
@@ -54,6 +58,8 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
+  const [showArchived, setShowArchived] = useState(false)
+
   useEffect(() => {
     if (!activeGroupId) {
       setProposals([])
@@ -97,7 +103,14 @@ export default function DashboardPage() {
   // the active group.
   const groupNotifications = notifications.filter((n) => n.groupId === activeGroupId)
   const unreadCount = groupNotifications.filter((n) => !n.read).length
-  const pendingActions = proposals.filter((p) =>
+
+  // Archive is evaluated per current user (manual archive is user-scoped;
+  // auto-archive is derived from status/date and identical for everyone).
+  const activeProposals = proposals.filter((p) => !isArchivedForUser(p, user.uid))
+  const archivedProposals = proposals.filter((p) => isArchivedForUser(p, user.uid))
+  const visibleProposals = showArchived ? archivedProposals : activeProposals
+
+  const pendingActions = activeProposals.filter((p) =>
     ['proposed', 'changes_requested', 'accepted'].includes(p.status)
   )
 
@@ -282,6 +295,29 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {hasGroup && (
+            <div className={styles.viewTabs} role="tablist">
+              <button
+                className={`${styles.viewTab} ${!showArchived ? styles.viewTabActive : ''}`}
+                onClick={() => setShowArchived(false)}
+                role="tab"
+                aria-selected={!showArchived}
+                type="button"
+              >
+                Active{activeProposals.length > 0 ? ` (${activeProposals.length})` : ''}
+              </button>
+              <button
+                className={`${styles.viewTab} ${showArchived ? styles.viewTabActive : ''}`}
+                onClick={() => setShowArchived(true)}
+                role="tab"
+                aria-selected={showArchived}
+                type="button"
+              >
+                Archived{archivedProposals.length > 0 ? ` (${archivedProposals.length})` : ''}
+              </button>
+            </div>
+          )}
+
           {!hasGroup ? (
             <p className={styles.emptyState}>
               Join or create a group above to start planning dates.
@@ -317,11 +353,17 @@ export default function DashboardPage() {
             <p className={styles.muted}>Loading…</p>
           ) : proposalsError ? (
             <p className={styles.errorMsg}>{proposalsError}</p>
-          ) : proposals.length === 0 ? (
-            <p className={styles.emptyState}>Create your first date idea.</p>
+          ) : visibleProposals.length === 0 ? (
+            <p className={styles.emptyState}>
+              {showArchived
+                ? 'No archived proposals.'
+                : proposals.length === 0
+                  ? 'Create your first date idea.'
+                  : 'No active proposals.'}
+            </p>
           ) : (
             <ul className={styles.proposalList}>
-              {proposals.map((p) => (
+              {visibleProposals.map((p) => (
                 <li key={p.id}>
                   <Link to={`/proposal/${p.id}`} className={styles.proposalRow}>
                     <span className={styles.proposalTitle}>{p.title}</span>

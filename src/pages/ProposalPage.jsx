@@ -3,7 +3,14 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import { db } from '../services/firebase/firestore'
-import { subscribeToProposal, updateProposal } from '../services/firebase/proposals'
+import {
+  subscribeToProposal,
+  updateProposal,
+  setProposalArchivedForUser,
+  deleteProposal,
+  isAutoArchived,
+  isArchivedForUser
+} from '../services/firebase/proposals'
 import { addComment, subscribeToComments } from '../services/firebase/comments'
 import {
   addResponsibility,
@@ -80,6 +87,11 @@ export default function ProposalPage() {
 
   const [statusError, setStatusError] = useState('')
   const [statusChanging, setStatusChanging] = useState('')
+
+  const [archiving, setArchiving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   const [commentText, setCommentText] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
@@ -227,6 +239,32 @@ export default function ProposalPage() {
     }
   }
 
+  async function toggleArchive(archived) {
+    if (archiving) return
+    setArchiving(true)
+    setActionError('')
+    try {
+      await setProposalArchivedForUser(id, user.uid, archived)
+    } catch {
+      setActionError('Failed to update archive. Please try again.')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (deleting) return
+    setDeleting(true)
+    setActionError('')
+    try {
+      await deleteProposal(id)
+      navigate('/dashboard')
+    } catch {
+      setActionError('Failed to delete. Please try again.')
+      setDeleting(false)
+    }
+  }
+
   async function submitComment(e) {
     e.preventDefault()
     if (commentSubmitting || !commentText.trim()) return
@@ -317,6 +355,10 @@ export default function ProposalPage() {
   }
 
   const nextStatuses = STATUS_TRANSITIONS[proposal.status] ?? []
+  const autoArchived = isAutoArchived(proposal)
+  const archivedForMe = isArchivedForUser(proposal, user.uid)
+  const manuallyArchived = (proposal.archivedByUserIds ?? []).includes(user.uid)
+  const isCreator = proposal.createdBy === user.uid
 
   return (
     <div className={styles.page}>
@@ -348,6 +390,9 @@ export default function ProposalPage() {
               <span className={`${styles.statusBadge} ${styles[`status_${proposal.status}`]}`}>
                 {STATUS_LABELS[proposal.status] ?? proposal.status}
               </span>
+              {archivedForMe && (
+                <span className={styles.archivedBadge}>Archived</span>
+              )}
             </div>
             <div className={styles.editActions}>
               {saveSuccess && <span className={styles.saveSuccess}>Saved</span>}
@@ -583,6 +628,80 @@ export default function ProposalPage() {
             </button>
           </form>
           {commentError && <p className={styles.errorMsg}>{commentError}</p>}
+        </section>
+
+        {/* Manage (archive / delete) */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Manage</h2>
+          <div className={styles.manageRow}>
+            {autoArchived ? (
+              <p className={styles.manageNote}>
+                {proposal.status === 'completed'
+                  ? 'Auto-archived because it’s completed.'
+                  : 'Auto-archived because its date has passed.'}{' '}
+                It stays in the Archived view for everyone.
+              </p>
+            ) : (
+              <button
+                className={styles.manageBtn}
+                onClick={() => toggleArchive(!manuallyArchived)}
+                disabled={archiving}
+                type="button"
+              >
+                {archiving
+                  ? 'Saving…'
+                  : manuallyArchived
+                    ? 'Unarchive'
+                    : 'Archive'}
+              </button>
+            )}
+
+            {!autoArchived && (
+              <span className={styles.manageHint}>
+                Archiving only hides it for you.
+              </span>
+            )}
+          </div>
+
+          {isCreator && (
+            <div className={styles.deleteRow}>
+              {confirmingDelete ? (
+                <>
+                  <span className={styles.manageHint}>
+                    Delete permanently? This removes all comments, responsibilities, and activity.
+                  </span>
+                  <div className={styles.deleteActions}>
+                    <button
+                      className={styles.deleteConfirmBtn}
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      type="button"
+                    >
+                      {deleting ? 'Deleting…' : 'Delete permanently'}
+                    </button>
+                    <button
+                      className={styles.cancelBtn}
+                      onClick={() => setConfirmingDelete(false)}
+                      disabled={deleting}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  className={styles.deleteBtn}
+                  onClick={() => setConfirmingDelete(true)}
+                  type="button"
+                >
+                  Delete proposal
+                </button>
+              )}
+            </div>
+          )}
+
+          {actionError && <p className={styles.errorMsg}>{actionError}</p>}
         </section>
       </main>
     </div>

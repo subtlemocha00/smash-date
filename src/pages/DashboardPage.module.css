@@ -286,6 +286,38 @@
   flex-shrink: 0;
 }
 
+/* Active / Archived tabs */
+
+.viewTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.viewTab {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 10px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  color: var(--fg-muted);
+  transition: color 0.12s ease;
+}
+
+.viewTab:hover {
+  color: var(--fg);
+}
+
+.viewTabActive {
+  color: var(--fg);
+  border-bottom-color: var(--chartreuse);
+}
+
 /* Proposal list */
 
 .newBtn {

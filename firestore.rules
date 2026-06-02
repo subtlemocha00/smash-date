@@ -21,6 +21,14 @@ service cloud.firestore {
       );
     }
 
+    // True when the current user authored the referenced proposal. Used by the
+    // cascade delete of a proposal's child docs (comments/responsibilities/
+    // activity), which the proposal's creator may trigger.
+    function isProposalCreatorById(proposalId) {
+      let p = get(/databases/$(database)/documents/proposals/$(proposalId)).data;
+      return isAuth() && ('createdBy' in p) && p.createdBy == request.auth.uid;
+    }
+
     // A non-member joining via invite may only add themselves to memberIds,
     // leaving every other field untouched.
     function isSelfJoin(groupId) {
@@ -88,9 +96,15 @@ service cloud.firestore {
       allow create: if isAuth() && isGroupMember(request.resource.data.groupId);
       // Members may update proposal fields, but groupId is immutable after creation.
       // FIX (MEDIUM): was `allow read, update, delete` with no field constraints — groupId could be changed.
+      // (Per-user manual archive writes only archivedByUserIds, allowed here.)
       allow update: if isGroupMember(resource.data.groupId)
         && request.resource.data.groupId == resource.data.groupId;
-      allow delete: if isGroupMember(resource.data.groupId);
+      // Only the proposal's creator may delete it; the group owner may also
+      // remove it (e.g. as part of deleting the whole group).
+      allow delete: if isGroupMember(resource.data.groupId) && (
+        (('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid)
+        || isGroupCreator(resource.data.groupId)
+      );
     }
 
     match /comments/{commentId} {
@@ -138,13 +152,16 @@ service cloud.firestore {
       allow create: if isAuth() && isGroupMember(
         get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
       );
-      // Only the group creator may delete individual activity events.
-      // Batch deletion via deleteGroup() is also initiated by the creator, so
-      // Firestore evaluates this against pre-commit state where the group still exists.
+      // Only the group creator may delete individual activity events; the
+      // proposal's creator may also delete them as part of cascade-deleting
+      // their proposal. Both deleteGroup() and deleteProposal() run in a batch,
+      // so Firestore evaluates this against pre-commit state where the group and
+      // proposal still exist.
       // FIX (MEDIUM): was `isGroupMember` — any member could delete audit log entries.
-      allow delete: if isGroupCreator(
-        get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
-      );
+      allow delete: if isProposalCreatorById(resource.data.proposalId)
+        || isGroupCreator(
+          get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+        );
     }
 
     match /notifications/{notificationId} {

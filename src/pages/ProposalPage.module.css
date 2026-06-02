@@ -607,3 +607,99 @@
   color: var(--fg);
   line-height: 1.45;
 }
+
+/* Archive / Manage */
+
+.archivedBadge {
+  display: inline-block;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--weight-semibold);
+  width: fit-content;
+  white-space: nowrap;
+  background: var(--st-draft-bg);
+  color: var(--st-draft-fg);
+}
+
+.manageRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.manageBtn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--fg);
+  transition: background 0.12s ease;
+}
+
+.manageBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.manageBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manageNote,
+.manageHint {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+.deleteRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.deleteActions {
+  display: flex;
+  gap: 8px;
+}
+
+.deleteBtn,
+.deleteConfirmBtn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--danger);
+  transition: background 0.12s ease;
+}
+
+.deleteConfirmBtn {
+  background: var(--danger);
+  color: #fff;
+}
+
+.deleteBtn:hover:not(:disabled),
+.deleteConfirmBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.deleteConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
