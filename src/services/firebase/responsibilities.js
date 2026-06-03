@@ -26,6 +26,10 @@ export async function toggleResponsibility(id, completed) {
   await updateDoc(doc(db, 'responsibilities', id), { completed })
 }
 
+export async function reassignResponsibility(id, assignedTo, assigneeName) {
+  await updateDoc(doc(db, 'responsibilities', id), { assignedTo, assigneeName })
+}
+
 export async function deleteResponsibility(id) {
   await deleteDoc(doc(db, 'responsibilities', id))
 }

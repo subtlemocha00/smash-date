@@ -26,6 +26,7 @@ import {
   addResponsibility,
   toggleResponsibility,
   deleteResponsibility,
+  reassignResponsibility,
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
@@ -128,6 +129,12 @@ export default function ProposalPage() {
   const [respAssignee, setRespAssignee] = useState('')
   const [respSubmitting, setRespSubmitting] = useState(false)
   const [respError, setRespError] = useState('')
+
+  const [reassigningRespId, setReassigningRespId] = useState(null)
+  const [reassignTo, setReassignTo] = useState('')
+  const [reassigning, setReassigning] = useState(false)
+
+  const [activityCollapsed, setActivityCollapsed] = useState(true)
 
   useEffect(() => {
     const unsub = subscribeToProposal(
@@ -404,6 +411,39 @@ export default function ProposalPage() {
     }
   }
 
+  async function handleReassign(r) {
+    const newUid = reassignTo || null
+    const newName = newUid ? (members[newUid] || '') : ''
+
+    if (newUid === (r.assignedTo || null)) {
+      setReassigningRespId(null)
+      return
+    }
+
+    setReassigning(true)
+    try {
+      await reassignResponsibility(r.id, newUid, newName)
+      const actMsg = newUid
+        ? `${userProfile.displayName || 'Someone'} reassigned "${r.title}" to ${newName}`
+        : `${userProfile.displayName || 'Someone'} unassigned "${r.title}"`
+      await logActivity(id, 'responsibility_assigned', actMsg)
+      if (newUid && newUid !== user.uid) {
+        await createNotification(
+          newUid,
+          'responsibility_assigned',
+          `${userProfile.displayName || 'Someone'} assigned you "${r.title}" on ${proposal?.title || 'a proposal'}`,
+          id,
+          proposal.groupId
+        )
+      }
+      setReassigningRespId(null)
+    } catch {
+      setReassigningRespId(null)
+    } finally {
+      setReassigning(false)
+    }
+  }
+
   if (loading) {
     return <div className={styles.loading}>Loading…</div>
   }
@@ -601,7 +641,51 @@ export default function ProposalPage() {
                       {r.title}
                     </span>
                   </label>
-                  <span className={styles.respAssignee}>{r.assigneeName || 'Unassigned'}</span>
+                  {reassigningRespId === r.id ? (
+                    <div className={styles.reassignRow}>
+                      <select
+                        className={styles.reassignSelect}
+                        value={reassignTo}
+                        onChange={(e) => setReassignTo(e.target.value)}
+                        autoFocus
+                      >
+                        <option value="">Unassigned</option>
+                        {Object.entries(members).map(([uid, name]) => (
+                          <option key={uid} value={uid}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className={styles.reassignSaveBtn}
+                        type="button"
+                        onClick={() => handleReassign(r)}
+                        disabled={reassigning}
+                      >
+                        {reassigning ? '…' : 'Save'}
+                      </button>
+                      <button
+                        className={styles.reassignCancelBtn}
+                        type="button"
+                        onClick={() => setReassigningRespId(null)}
+                        disabled={reassigning}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className={styles.respAssigneeBtn}
+                      type="button"
+                      title="Click to reassign"
+                      onClick={() => {
+                        setReassigningRespId(r.id)
+                        setReassignTo(r.assignedTo || '')
+                      }}
+                    >
+                      {r.assigneeName || 'Unassigned'}
+                    </button>
+                  )}
                   <button
                     className={styles.removeBtn}
                     onClick={() => deleteResponsibility(r.id)}
@@ -646,18 +730,33 @@ export default function ProposalPage() {
 
         {/* Activity feed */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Activity</h2>
-          {activity.length === 0 ? (
-            <p className={styles.emptyState}>No activity yet.</p>
-          ) : (
-            <ul className={styles.activityList}>
-              {activity.map((e) => (
-                <li key={e.id} className={styles.activityItem}>
-                  <span className={styles.activityDesc}>{e.description}</span>
-                  <span className={styles.activityTime}>{formatTime(e.createdAt)}</span>
-                </li>
-              ))}
-            </ul>
+          <div className={styles.sectionHeader}>
+            <button
+              className={styles.collapseToggle}
+              onClick={() => setActivityCollapsed((c) => !c)}
+              aria-expanded={!activityCollapsed}
+              type="button"
+            >
+              <span
+                className={`${styles.collapseChevron} ${activityCollapsed ? styles.collapseChevronClosed : ''}`}
+                aria-hidden="true"
+              />
+              <span className={styles.sectionTitle}>Activity</span>
+            </button>
+          </div>
+          {!activityCollapsed && (
+            activity.length === 0 ? (
+              <p className={styles.emptyState}>No activity yet.</p>
+            ) : (
+              <ul className={styles.activityList}>
+                {activity.map((e) => (
+                  <li key={e.id} className={styles.activityItem}>
+                    <span className={styles.activityDesc}>{e.description}</span>
+                    <span className={styles.activityTime}>{formatTime(e.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )
           )}
         </section>
 
