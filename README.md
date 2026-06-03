@@ -58,14 +58,14 @@ src/
     AuthContext.jsx              # Auth state + user profile, exposes useAuth()
     GroupContext.jsx             # Groups, activeGroupId, setActiveGroup, exposes useGroups()
   pages/
-    LoginPage.jsx / .module.css        # Email/password + Google sign-in and register
+    LoginPage.jsx / .module.css        # Email/password + Google sign-in, register, password reset
     DashboardPage.jsx / .module.css    # Group switcher, needs-attention, notifications, proposals
     ProposalPage.jsx / .module.css     # Proposal detail — fields, status, responsibilities, activity, comments
     SettingsPage.jsx / .module.css     # Account info, theme, group management, sign out
   services/
     firebase/
       config.js               # initializeApp — reads VITE_FIREBASE_* env vars
-      auth.js                 # signInWithEmail, registerWithEmail, signInWithGoogle, logOut
+      auth.js                 # signInWithEmail, registerWithEmail, signInWithGoogle, resetPassword, logOut
       firestore.js            # db export
       groups.js               # createGroup, joinGroupByCode, subscribeToUserGroups, setActiveGroupId,
                               #   setMemberName, renameGroup, removeMember, deleteGroup
@@ -101,6 +101,8 @@ There is **no** separate group-setup route — creating or joining a group happe
 3. `loading → false`; `user` and `userProfile` become available.
 4. `GroupProvider` subscribes to the user's groups in realtime and selects an active group (last-used from localStorage / profile, else the first group).
 5. LoginPage redirects to `/dashboard` once authenticated.
+
+The LoginPage has three modes on a single public `/login` route: **Sign In**, **Register**, and a **Forgot password?** reset flow. The reset flow collects an email and calls Firebase's `sendPasswordResetEmail`, then shows a confirmation notice. Auth state is persisted across reloads via Firebase's default browser-local persistence.
 
 ### State Management
 
@@ -264,6 +266,7 @@ Rules live in `firestore.rules` and enforce:
 ### Implemented
 
 - Email/password and Google authentication (sign in + register), persisted across reloads.
+- Password reset via Firebase email ("Forgot password?" on the login screen).
 - Firestore user profile auto-created on first sign-in, with a graceful fallback if the profile can't be loaded.
 - Light/dark theme with no flash-of-wrong-theme (applied pre-paint).
 - Multi-group membership: create, join by invite code, switch active group, rename, remove members, delete group (owner-only).

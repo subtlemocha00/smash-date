@@ -102,6 +102,35 @@
   color: var(--danger);
 }
 
+.notice {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.resetIntro {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+.linkBtn {
+  display: block;
+  margin: 12px auto 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--fg-muted);
+  text-decoration: underline;
+}
+
+.linkBtn:hover {
+  color: var(--fg);
+}
+
 .primaryBtn {
   font-family: var(--font-body);
   font-size: 14px;
