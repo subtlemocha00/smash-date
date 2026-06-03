@@ -546,6 +546,64 @@
   color: var(--fg-muted);
 }
 
+/* Due date badge */
+
+.dueBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--fg-subtle);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dueBadgeWarn {
+  background: var(--pollen-050);
+  color: var(--pollen-700);
+}
+
+.dueBadgeDanger {
+  background: var(--coral-050);
+  color: var(--coral-700);
+}
+
+/* Due date input in add-responsibility form */
+
+.dateLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.dateLabelText {
+  font-size: 11px;
+  color: var(--fg-subtle);
+  line-height: 1;
+}
+
+.dateInput {
+  font-family: var(--font-body);
+  padding: 0.45rem 0.6rem;
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+  cursor: pointer;
+}
+
+.dateInput:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
 .removeBtn {
   background: none;
   border: none;

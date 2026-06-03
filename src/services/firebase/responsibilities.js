@@ -11,12 +11,13 @@ import {
 } from 'firebase/firestore'
 import { db } from './firestore'
 
-export async function addResponsibility(proposalId, title, assignedTo, assigneeName) {
+export async function addResponsibility(proposalId, title, assignedTo, assigneeName, dueDate = null) {
   await addDoc(collection(db, 'responsibilities'), {
     proposalId,
     title,
     assignedTo,
     assigneeName,
+    dueDate: dueDate || null,
     completed: false,
     createdAt: serverTimestamp()
   })

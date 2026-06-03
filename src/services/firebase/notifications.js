@@ -11,13 +11,14 @@ import {
 } from 'firebase/firestore'
 import { db } from './firestore'
 
-export async function createNotification(userId, type, message, proposalId, groupId) {
+export async function createNotification(userId, type, message, proposalId, groupId, dueDate = null) {
   await addDoc(collection(db, 'notifications'), {
     userId,
     type,
     message,
     proposalId: proposalId ?? null,
     groupId: groupId ?? null,
+    dueDate: dueDate ?? null,
     read: false,
     createdAt: serverTimestamp()
   })

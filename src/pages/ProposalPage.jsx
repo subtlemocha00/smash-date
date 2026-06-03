@@ -127,6 +127,7 @@ export default function ProposalPage() {
 
   const [respTitle, setRespTitle] = useState('')
   const [respAssignee, setRespAssignee] = useState('')
+  const [respDueDate, setRespDueDate] = useState('')
   const [respSubmitting, setRespSubmitting] = useState(false)
   const [respError, setRespError] = useState('')
 
@@ -385,7 +386,8 @@ export default function ProposalPage() {
     setRespError('')
     try {
       const assigneeName = respAssignee ? members[respAssignee] || respAssignee : ''
-      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName)
+      const dueDate = respDueDate || null
+      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName, dueDate)
       await logActivity(
         id,
         'responsibility_assigned',
@@ -399,11 +401,13 @@ export default function ProposalPage() {
           'responsibility_assigned',
           `${userProfile.displayName || 'Someone'} assigned you "${respTitle.trim()}" on ${proposal?.title || 'a proposal'}`,
           id,
-          proposal.groupId
+          proposal.groupId,
+          dueDate
         )
       }
       setRespTitle('')
       setRespAssignee('')
+      setRespDueDate('')
     } catch {
       setRespError('Failed to add responsibility. Please try again.')
     } finally {
@@ -433,7 +437,8 @@ export default function ProposalPage() {
           'responsibility_assigned',
           `${userProfile.displayName || 'Someone'} assigned you "${r.title}" on ${proposal?.title || 'a proposal'}`,
           id,
-          proposal.groupId
+          proposal.groupId,
+          r.dueDate || null
         )
       }
       setReassigningRespId(null)
@@ -641,6 +646,7 @@ export default function ProposalPage() {
                       {r.title}
                     </span>
                   </label>
+                  <DueBadge dueDate={r.dueDate} />
                   {reassigningRespId === r.id ? (
                     <div className={styles.reassignRow}>
                       <select
@@ -717,6 +723,15 @@ export default function ProposalPage() {
                 </option>
               ))}
             </select>
+            <label className={styles.dateLabel}>
+              <span className={styles.dateLabelText}>Due date</span>
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={respDueDate}
+                onChange={(e) => setRespDueDate(e.target.value)}
+              />
+            </label>
             <button
               className={styles.addBtn}
               type="submit"
@@ -1065,4 +1080,28 @@ function VotingField({
       </div>
     </div>
   )
+}
+
+function dueDateLabel(dueDate) {
+  if (!dueDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const days = Math.round((due - today) / 86400000)
+  if (days < 0) return { text: `${Math.abs(days)}d overdue`, level: 'danger' }
+  if (days === 0) return { text: 'Due today', level: 'warn' }
+  if (days <= 3) return { text: `${days}d left`, level: 'warn' }
+  return { text: `${days}d left`, level: 'normal' }
+}
+
+function DueBadge({ dueDate }) {
+  const info = dueDateLabel(dueDate)
+  if (!info) return null
+  const cls = [
+    styles.dueBadge,
+    info.level === 'danger' ? styles.dueBadgeDanger : '',
+    info.level === 'warn' ? styles.dueBadgeWarn : ''
+  ].filter(Boolean).join(' ')
+  return <span className={cls}>{info.text}</span>
 }

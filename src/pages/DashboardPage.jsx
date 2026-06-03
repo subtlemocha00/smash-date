@@ -281,6 +281,9 @@ export default function DashboardPage() {
                       ) : (
                         n.message
                       )}
+                      {n.type === 'responsibility_assigned' && n.dueDate && (
+                        <DueBadge dueDate={n.dueDate} />
+                      )}
                     </span>
                     <span className={styles.notifTime}>{formatDate(n.createdAt)}</span>
                   </li>
@@ -390,4 +393,28 @@ export default function DashboardPage() {
       </main>
     </div>
   )
+}
+
+function dueDateLabel(dueDate) {
+  if (!dueDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const days = Math.round((due - today) / 86400000)
+  if (days < 0) return { text: `${Math.abs(days)}d overdue`, level: 'danger' }
+  if (days === 0) return { text: 'Due today', level: 'warn' }
+  if (days <= 3) return { text: `${days}d left`, level: 'warn' }
+  return { text: `${days}d left`, level: 'normal' }
+}
+
+function DueBadge({ dueDate }) {
+  const info = dueDateLabel(dueDate)
+  if (!info) return null
+  const cls = [
+    styles.dueBadge,
+    info.level === 'danger' ? styles.dueBadgeDanger : '',
+    info.level === 'warn' ? styles.dueBadgeWarn : ''
+  ].filter(Boolean).join(' ')
+  return <span className={cls}>{info.text}</span>
 }
