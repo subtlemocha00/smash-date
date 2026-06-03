@@ -10,6 +10,11 @@ import {
   deleteProposal,
   isAutoArchived,
   isArchivedForUser,
+  isProposalComplete,
+  acceptProposal,
+  revokeAcceptance,
+  transitionProposal,
+  dismissProposalForUser,
   VOTABLE_FIELDS,
   computeVotingChanges,
   isFieldVotingEnabled,
@@ -44,25 +49,6 @@ const STATUS_LABELS = {
   confirmed: 'Confirmed',
   completed: 'Completed',
   declined: 'Declined'
-}
-
-const STATUS_TRANSITIONS = {
-  draft: ['proposed'],
-  proposed: ['changes_requested', 'accepted', 'declined'],
-  changes_requested: ['proposed'],
-  accepted: ['confirmed', 'declined'],
-  confirmed: ['completed'],
-  completed: [],
-  declined: ['proposed']
-}
-
-const STATUS_ACTION_LABELS = {
-  proposed: 'Mark as Proposed',
-  changes_requested: 'Request Changes',
-  accepted: 'Accept',
-  confirmed: 'Confirm',
-  completed: 'Mark Complete',
-  declined: 'Decline'
 }
 
 // Detail fields in display order. `votable` fields can opt into field-level
@@ -114,7 +100,8 @@ export default function ProposalPage() {
   const [lockMessage, setLockMessage] = useState('')
 
   const [statusError, setStatusError] = useState('')
-  const [statusChanging, setStatusChanging] = useState('')
+  const [busyAction, setBusyAction] = useState('')
+  const [confirmingLock, setConfirmingLock] = useState(false)
 
   const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -127,7 +114,6 @@ export default function ProposalPage() {
 
   const [respTitle, setRespTitle] = useState('')
   const [respAssignee, setRespAssignee] = useState('')
-  const [respDueDate, setRespDueDate] = useState('')
   const [respSubmitting, setRespSubmitting] = useState(false)
   const [respError, setRespError] = useState('')
 
@@ -192,6 +178,14 @@ export default function ProposalPage() {
     loadMembers()
   }, [proposal?.groupId])
 
+  // A confirmed (or completed) proposal is locked, so never leave the editor
+  // open for one — e.g. if it's confirmed in another tab while a member edits.
+  // Also drop any pending "lock anyway?" prompt when the status changes.
+  useEffect(() => {
+    if (proposal?.status === 'confirmed') setEditing(false)
+    setConfirmingLock(false)
+  }, [proposal?.status])
+
   function startEditing() {
     setEditFields({
       title: proposal.title || '',
@@ -226,7 +220,13 @@ export default function ProposalPage() {
     setSaveError('')
     try {
       const votingChanges = computeVotingChanges(proposal, editFields, votingToggles)
-      await updateProposal(id, { ...editFields, ...votingChanges })
+      // Editing invalidates prior approvals, so clear acceptances and pull an
+      // already-accepted plan back to `proposed` for everyone to re-approve.
+      const acceptanceReset =
+        proposal.status === 'accepted'
+          ? { acceptedBy: [], status: 'proposed' }
+          : { acceptedBy: [] }
+      await updateProposal(id, { ...editFields, ...votingChanges, ...acceptanceReset })
       await logActivity(
         id,
         'fields_updated',
@@ -252,31 +252,109 @@ export default function ProposalPage() {
     }
   }
 
-  async function changeStatus(newStatus) {
-    if (statusChanging) return
+  // Runs a status/acceptance action under a single busy key, logging it to the
+  // activity feed and optionally notifying the group.
+  async function runAction(key, work, { activity, notify } = {}) {
+    if (busyAction) return
     setStatusError('')
-    setStatusChanging(newStatus)
+    setBusyAction(key)
     try {
-      await updateProposal(id, { status: newStatus })
-      await logActivity(
-        id,
-        'status_changed',
-        `${userProfile.displayName || 'Someone'} changed status to ${STATUS_LABELS[newStatus]}`
-      )
-      if (memberIds.length > 0) {
+      await work()
+      if (activity) await logActivity(id, 'status_changed', activity)
+      if (notify && memberIds.length > 0) {
         await createNotificationsForGroup(
           memberIds,
           user.uid,
           'status_changed',
-          `${userProfile.displayName || 'Someone'} changed ${proposal?.title || 'a proposal'} to ${STATUS_LABELS[newStatus]}`,
+          notify,
           id,
           proposal.groupId
         )
       }
     } catch {
-      setStatusError('Failed to update status. Please try again.')
+      setStatusError('Action failed. Please try again.')
     } finally {
-      setStatusChanging('')
+      setBusyAction('')
+    }
+  }
+
+  const actorName = userProfile.displayName || 'Someone'
+  const proposalTitle = proposal?.title || 'a proposal'
+
+  function handlePropose() {
+    runAction('propose', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
+      activity: `${actorName} proposed this date`,
+      notify: `${actorName} proposed a date: ${proposalTitle}`
+    })
+  }
+
+  function handleAccept() {
+    const acceptedBy = proposal.acceptedBy ?? []
+    const willBeUnanimous =
+      memberIds.length > 0 && memberIds.every((m) => m === user.uid || acceptedBy.includes(m))
+    runAction('accept', () => acceptProposal(id, user.uid, memberIds, acceptedBy), {
+      activity: `${actorName} accepted the proposal`,
+      notify: willBeUnanimous
+        ? `Everyone accepted ${proposalTitle} — ready to confirm`
+        : undefined
+    })
+  }
+
+  function handleRevokeAcceptance() {
+    runAction('revoke', () => revokeAcceptance(id, user.uid), {
+      activity: `${actorName} withdrew their acceptance`
+    })
+  }
+
+  function handleConfirm() {
+    runAction('confirm', () => transitionProposal(id, 'confirmed'), {
+      activity: `${actorName} confirmed the proposal`,
+      notify: `${actorName} confirmed and locked in: ${proposalTitle}`
+    })
+  }
+
+  function handleRequestChanges() {
+    runAction(
+      'changes',
+      () => transitionProposal(id, 'changes_requested', { resetAcceptances: true }),
+      {
+        activity: `${actorName} requested changes`,
+        notify: `${actorName} requested changes on: ${proposalTitle}`
+      }
+    )
+  }
+
+  function handleDecline() {
+    runAction('decline', () => transitionProposal(id, 'declined', { resetAcceptances: true }), {
+      activity: `${actorName} declined the proposal`,
+      notify: `${actorName} declined: ${proposalTitle}`
+    })
+  }
+
+  function handleRepropose() {
+    runAction('repropose', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
+      activity: `${actorName} re-proposed this date`,
+      notify: `${actorName} re-proposed: ${proposalTitle}`
+    })
+  }
+
+  function handleReopen() {
+    runAction('reopen', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
+      activity: `${actorName} reopened the proposal for editing`,
+      notify: `${actorName} reopened ${proposalTitle} for editing`
+    })
+  }
+
+  async function handleDismiss() {
+    if (busyAction) return
+    setStatusError('')
+    setBusyAction('dismiss')
+    try {
+      await dismissProposalForUser(id, user.uid, true)
+      navigate('/dashboard')
+    } catch {
+      setStatusError('Failed to remove from your archive. Please try again.')
+      setBusyAction('')
     }
   }
 
@@ -386,8 +464,7 @@ export default function ProposalPage() {
     setRespError('')
     try {
       const assigneeName = respAssignee ? members[respAssignee] || respAssignee : ''
-      const dueDate = respDueDate || null
-      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName, dueDate)
+      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName)
       await logActivity(
         id,
         'responsibility_assigned',
@@ -401,13 +478,11 @@ export default function ProposalPage() {
           'responsibility_assigned',
           `${userProfile.displayName || 'Someone'} assigned you "${respTitle.trim()}" on ${proposal?.title || 'a proposal'}`,
           id,
-          proposal.groupId,
-          dueDate
+          proposal.groupId
         )
       }
       setRespTitle('')
       setRespAssignee('')
-      setRespDueDate('')
     } catch {
       setRespError('Failed to add responsibility. Please try again.')
     } finally {
@@ -437,8 +512,7 @@ export default function ProposalPage() {
           'responsibility_assigned',
           `${userProfile.displayName || 'Someone'} assigned you "${r.title}" on ${proposal?.title || 'a proposal'}`,
           id,
-          proposal.groupId,
-          r.dueDate || null
+          proposal.groupId
         )
       }
       setReassigningRespId(null)
@@ -475,12 +549,30 @@ export default function ProposalPage() {
     )
   }
 
-  const nextStatuses = STATUS_TRANSITIONS[proposal.status] ?? []
   const autoArchived = isAutoArchived(proposal)
   const archivedForMe = isArchivedForUser(proposal, user.uid)
   const manuallyArchived = (proposal.archivedByUserIds ?? []).includes(user.uid)
   const isCreator = proposal.createdBy === user.uid
   const hasActiveVoting = VOTABLE_FIELDS.some((f) => isFieldVotingActive(proposal, f))
+
+  // Lifecycle state. Completion is derived from the event date (day after);
+  // confirmation is the stored, creator-set lock.
+  const completed = isProposalComplete(proposal) && proposal.status !== 'declined'
+  const isConfirmed = proposal.status === 'confirmed'
+  // Two lock levels: confirming locks details + responsibility delegation;
+  // completion additionally locks the responsibility checkboxes (totally locked,
+  // archive-removal only).
+  const detailsLocked = completed || isConfirmed
+  const displayStatus = completed ? 'completed' : proposal.status
+
+  // Per-member acceptance.
+  const acceptedBy = proposal.acceptedBy ?? []
+  const acceptedCount = memberIds.filter((m) => acceptedBy.includes(m)).length
+  const hasAccepted = acceptedBy.includes(user.uid)
+  const allAccepted = memberIds.length > 0 && memberIds.every((m) => acceptedBy.includes(m))
+  // Accept / decline / request-changes are available while the plan is open for
+  // approval (proposed or already unanimously accepted, but not yet confirmed).
+  const inApproval = proposal.status === 'proposed' || proposal.status === 'accepted'
 
   return (
     <div className={styles.page}>
@@ -509,8 +601,8 @@ export default function ProposalPage() {
               ) : (
                 <h1 className={styles.title}>{proposal.title}</h1>
               )}
-              <span className={`${styles.statusBadge} ${styles[`status_${proposal.status}`]}`}>
-                {STATUS_LABELS[proposal.status] ?? proposal.status}
+              <span className={`${styles.statusBadge} ${styles[`status_${displayStatus}`]}`}>
+                {STATUS_LABELS[displayStatus] ?? displayStatus}
               </span>
               {archivedForMe && (
                 <span className={styles.archivedBadge}>Archived</span>
@@ -518,7 +610,11 @@ export default function ProposalPage() {
             </div>
             <div className={styles.editActions}>
               {saveSuccess && <span className={styles.saveSuccess}>Saved</span>}
-              {editing ? (
+              {detailsLocked ? (
+                <span className={styles.lockedNote}>
+                  {completed ? 'Locked · completed' : 'Locked · confirmed'}
+                </span>
+              ) : editing ? (
                 <>
                   <button
                     className={styles.saveBtn}
@@ -591,6 +687,7 @@ export default function ProposalPage() {
                       resolvedValue={proposal[f.key]}
                       userId={user.uid}
                       isCreator={isCreator}
+                      frozen={detailsLocked}
                       onVote={handleVote}
                       onAddOption={handleAddOption}
                       onLock={handleLockField}
@@ -603,32 +700,194 @@ export default function ProposalPage() {
           </div>
         </section>
 
-        {/* Status actions */}
-        {nextStatuses.length > 0 && (
+        {/* Workflow / status. Hidden once completed — a completed plan is fully
+            locked and only offers per-user archive removal (in Manage below). */}
+        {!completed && (
           <section className={styles.section}>
             <h2 className={styles.sectionTitle}>Update Status</h2>
-            <div className={styles.statusActions}>
-              {nextStatuses.map((s) => (
-                <button
-                  key={s}
-                  className={`${styles.statusBtn} ${styles[`statusBtn_${s}`]}`}
-                  onClick={() => changeStatus(s)}
-                  disabled={!!statusChanging}
-                  type="button"
-                >
-                  {statusChanging === s
-                    ? 'Updating…'
-                    : STATUS_ACTION_LABELS[s] ?? STATUS_LABELS[s]}
-                </button>
+
+            {proposal.status === 'draft' &&
+              (isCreator ? (
+                <div className={styles.statusActions}>
+                  <button
+                    className={`${styles.statusBtn} ${styles.statusBtn_proposed}`}
+                    onClick={handlePropose}
+                    disabled={!!busyAction}
+                    type="button"
+                  >
+                    {busyAction === 'propose' ? 'Proposing…' : 'Propose to group'}
+                  </button>
+                </div>
+              ) : (
+                <p className={styles.statusHint}>This is still a draft.</p>
               ))}
-            </div>
+
+            {inApproval && (
+              <>
+                <p className={styles.statusHint}>
+                  {acceptedCount} of {memberIds.length} accepted
+                  {allAccepted ? ' — everyone’s on board.' : '.'}
+                </p>
+                <div className={styles.statusActions}>
+                  {hasAccepted ? (
+                    <button
+                      className={styles.statusBtnGhost}
+                      onClick={handleRevokeAcceptance}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'revoke' ? 'Updating…' : '✓ You accepted — undo'}
+                    </button>
+                  ) : (
+                    <button
+                      className={`${styles.statusBtn} ${styles.statusBtn_accepted}`}
+                      onClick={handleAccept}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'accept' ? 'Accepting…' : 'Accept'}
+                    </button>
+                  )}
+
+                  {/* The creator can confirm at any point. If acceptances are
+                      still missing, clicking opens an inline confirmation first
+                      so the plan isn't held up by members who haven't responded. */}
+                  {isCreator && !confirmingLock && (
+                    <button
+                      className={`${styles.statusBtn} ${styles.statusBtn_confirmed}`}
+                      onClick={() => (allAccepted ? handleConfirm() : setConfirmingLock(true))}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'confirm' ? 'Confirming…' : 'Confirm & Lock'}
+                    </button>
+                  )}
+
+                  <button
+                    className={styles.statusBtnGhost}
+                    onClick={handleRequestChanges}
+                    disabled={!!busyAction}
+                    type="button"
+                  >
+                    {busyAction === 'changes' ? 'Updating…' : 'Request Changes'}
+                  </button>
+                  <button
+                    className={`${styles.statusBtn} ${styles.statusBtn_declined}`}
+                    onClick={handleDecline}
+                    disabled={!!busyAction}
+                    type="button"
+                  >
+                    {busyAction === 'decline' ? 'Updating…' : 'Decline'}
+                  </button>
+                </div>
+
+                {isCreator && confirmingLock && (
+                  <div className={styles.confirmLockRow}>
+                    <span className={styles.statusHint}>
+                      Only {acceptedCount} of {memberIds.length}{' '}
+                      {acceptedCount === 1 ? 'member has' : 'members have'} accepted. Confirm and
+                      lock the plan in for everyone anyway?
+                    </span>
+                    <div className={styles.deleteActions}>
+                      <button
+                        className={`${styles.statusBtn} ${styles.statusBtn_confirmed}`}
+                        onClick={handleConfirm}
+                        disabled={!!busyAction}
+                        type="button"
+                      >
+                        {busyAction === 'confirm' ? 'Confirming…' : 'Lock anyway'}
+                      </button>
+                      <button
+                        className={styles.cancelBtn}
+                        onClick={() => setConfirmingLock(false)}
+                        disabled={!!busyAction}
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {allAccepted && !isCreator && (
+                  <p className={styles.statusHint}>Waiting for the creator to confirm.</p>
+                )}
+              </>
+            )}
+
+            {proposal.status === 'changes_requested' && (
+              <>
+                <p className={styles.statusHint}>
+                  Changes were requested — the creator will revise and re-propose.
+                </p>
+                {isCreator && (
+                  <div className={styles.statusActions}>
+                    <button
+                      className={`${styles.statusBtn} ${styles.statusBtn_proposed}`}
+                      onClick={handleRepropose}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'repropose' ? 'Re-proposing…' : 'Re-propose'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {isConfirmed && (
+              <>
+                <p className={styles.statusHint}>
+                  Confirmed and locked in{proposal.date ? ` for ${proposal.date}` : ''}. It will
+                  complete automatically the day after.
+                </p>
+                {isCreator && (
+                  <div className={styles.statusActions}>
+                    <button
+                      className={styles.statusBtnGhost}
+                      onClick={handleReopen}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'reopen' ? 'Reopening…' : 'Reopen for Editing'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {proposal.status === 'declined' && (
+              <>
+                <p className={styles.statusHint}>This proposal was declined.</p>
+                {isCreator && (
+                  <div className={styles.statusActions}>
+                    <button
+                      className={`${styles.statusBtn} ${styles.statusBtn_proposed}`}
+                      onClick={handleRepropose}
+                      disabled={!!busyAction}
+                      type="button"
+                    >
+                      {busyAction === 'repropose' ? 'Re-proposing…' : 'Re-propose'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
             {statusError && <p className={styles.errorMsg}>{statusError}</p>}
           </section>
         )}
 
         {/* Responsibilities */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Responsibilities</h2>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Responsibilities</h2>
+            {detailsLocked && (
+              <span className={styles.lockedNote}>
+                {completed ? 'Locked · completed' : 'Locked · confirmed'}
+              </span>
+            )}
+          </div>
           {responsibilities.length === 0 ? (
             <p className={styles.emptyState}>No responsibilities assigned.</p>
           ) : (
@@ -641,13 +900,17 @@ export default function ProposalPage() {
                       checked={r.completed}
                       onChange={() => toggleResponsibility(r.id, !r.completed)}
                       className={styles.respCheck}
+                      disabled={completed}
                     />
                     <span className={r.completed ? styles.respTitleDone : styles.respTitle}>
                       {r.title}
                     </span>
                   </label>
-                  <DueBadge dueDate={r.dueDate} />
-                  {reassigningRespId === r.id ? (
+                  {detailsLocked ? (
+                    <span className={styles.respAssignee}>
+                      {r.assigneeName || 'Unassigned'}
+                    </span>
+                  ) : reassigningRespId === r.id ? (
                     <div className={styles.reassignRow}>
                       <select
                         className={styles.reassignSelect}
@@ -692,55 +955,52 @@ export default function ProposalPage() {
                       {r.assigneeName || 'Unassigned'}
                     </button>
                   )}
-                  <button
-                    className={styles.removeBtn}
-                    onClick={() => deleteResponsibility(r.id)}
-                    type="button"
-                    aria-label="Remove"
-                  >
-                    ×
-                  </button>
+                  {!detailsLocked && (
+                    <button
+                      className={styles.removeBtn}
+                      onClick={() => deleteResponsibility(r.id)}
+                      type="button"
+                      aria-label="Remove"
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
-          <form onSubmit={submitResponsibility} className={styles.addForm}>
-            <input
-              className={styles.input}
-              placeholder="e.g. Book restaurant"
-              value={respTitle}
-              onChange={(e) => setRespTitle(e.target.value)}
-            />
-            <select
-              className={styles.select}
-              value={respAssignee}
-              onChange={(e) => setRespAssignee(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {Object.entries(members).map(([uid, name]) => (
-                <option key={uid} value={uid}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <label className={styles.dateLabel}>
-              <span className={styles.dateLabelText}>Due date</span>
-              <input
-                type="date"
-                className={styles.dateInput}
-                value={respDueDate}
-                onChange={(e) => setRespDueDate(e.target.value)}
-              />
-            </label>
-            <button
-              className={styles.addBtn}
-              type="submit"
-              disabled={respSubmitting || !respTitle.trim()}
-            >
-              {respSubmitting ? 'Adding…' : 'Add'}
-            </button>
-          </form>
-          {respError && <p className={styles.errorMsg}>{respError}</p>}
+          {!detailsLocked && (
+            <>
+              <form onSubmit={submitResponsibility} className={styles.addForm}>
+                <input
+                  className={styles.input}
+                  placeholder="e.g. Book restaurant"
+                  value={respTitle}
+                  onChange={(e) => setRespTitle(e.target.value)}
+                />
+                <select
+                  className={styles.select}
+                  value={respAssignee}
+                  onChange={(e) => setRespAssignee(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {Object.entries(members).map(([uid, name]) => (
+                    <option key={uid} value={uid}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className={styles.addBtn}
+                  type="submit"
+                  disabled={respSubmitting || !respTitle.trim()}
+                >
+                  {respSubmitting ? 'Adding…' : 'Add'}
+                </button>
+              </form>
+              {respError && <p className={styles.errorMsg}>{respError}</p>}
+            </>
+          )}
         </section>
 
         {/* Activity feed */}
@@ -793,114 +1053,136 @@ export default function ProposalPage() {
               ))}
             </ul>
           )}
-          <form onSubmit={submitComment} className={styles.commentForm}>
-            <input
-              className={styles.input}
-              placeholder="Add a comment…"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-            />
-            <button
-              className={styles.addBtn}
-              type="submit"
-              disabled={commentSubmitting || !commentText.trim()}
-            >
-              {commentSubmitting ? 'Posting…' : 'Post'}
-            </button>
-          </form>
-          {commentError && <p className={styles.errorMsg}>{commentError}</p>}
+          {completed ? (
+            <p className={styles.emptyState}>This plan is complete — commenting is closed.</p>
+          ) : (
+            <>
+              <form onSubmit={submitComment} className={styles.commentForm}>
+                <input
+                  className={styles.input}
+                  placeholder="Add a comment…"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                />
+                <button
+                  className={styles.addBtn}
+                  type="submit"
+                  disabled={commentSubmitting || !commentText.trim()}
+                >
+                  {commentSubmitting ? 'Posting…' : 'Post'}
+                </button>
+              </form>
+              {commentError && <p className={styles.errorMsg}>{commentError}</p>}
+            </>
+          )}
         </section>
 
-        {/* Manage (voting / archive / delete) */}
+        {/* Manage. A completed proposal is fully locked: the only action anyone
+            has is removing it from their own archive. */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Manage</h2>
 
-          {isCreator && hasActiveVoting && (
-            <div className={styles.manageRow}>
-              <button
-                className={styles.manageBtn}
-                onClick={handleLockProposal}
-                disabled={lockingProposal}
-                type="button"
-              >
-                {lockingProposal ? 'Locking…' : 'Finalize voting (lock all fields)'}
-              </button>
-              <span className={styles.manageHint}>
-                Locks each field to its winning option.
-              </span>
-            </div>
-          )}
-          {lockMessage && <p className={styles.manageNote}>{lockMessage}</p>}
-
-          <div className={styles.manageRow}>
-            {autoArchived ? (
-              <p className={styles.manageNote}>
-                {proposal.status === 'completed'
-                  ? 'Auto-archived because it’s completed.'
-                  : 'Auto-archived because its date has passed.'}{' '}
-                It stays in the Archived view for everyone.
-              </p>
-            ) : (
-              <button
-                className={styles.manageBtn}
-                onClick={() => toggleArchive(!manuallyArchived)}
-                disabled={archiving}
-                type="button"
-              >
-                {archiving
-                  ? 'Saving…'
-                  : manuallyArchived
-                    ? 'Unarchive'
-                    : 'Archive'}
-              </button>
-            )}
-
-            {!autoArchived && (
-              <span className={styles.manageHint}>
-                Archiving only hides it for you.
-              </span>
-            )}
-          </div>
-
-          {isCreator && (
-            <div className={styles.deleteRow}>
-              {confirmingDelete ? (
-                <>
-                  <span className={styles.manageHint}>
-                    Delete permanently? This removes all comments, responsibilities, and activity.
-                  </span>
-                  <div className={styles.deleteActions}>
-                    <button
-                      className={styles.deleteConfirmBtn}
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      type="button"
-                    >
-                      {deleting ? 'Deleting…' : 'Delete permanently'}
-                    </button>
-                    <button
-                      className={styles.cancelBtn}
-                      onClick={() => setConfirmingDelete(false)}
-                      disabled={deleting}
-                      type="button"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              ) : (
+          {completed ? (
+            <>
+              <p className={styles.manageNote}>This plan is complete and locked.</p>
+              <div className={styles.manageRow}>
                 <button
-                  className={styles.deleteBtn}
-                  onClick={() => setConfirmingDelete(true)}
+                  className={styles.manageBtn}
+                  onClick={handleDismiss}
+                  disabled={busyAction === 'dismiss'}
                   type="button"
                 >
-                  Delete proposal
+                  {busyAction === 'dismiss' ? 'Removing…' : 'Remove from my archive'}
                 </button>
+                <span className={styles.manageHint}>
+                  Removes it from your archive only — everyone else keeps theirs.
+                </span>
+              </div>
+              {statusError && <p className={styles.errorMsg}>{statusError}</p>}
+            </>
+          ) : (
+            <>
+              {isCreator && hasActiveVoting && (
+                <div className={styles.manageRow}>
+                  <button
+                    className={styles.manageBtn}
+                    onClick={handleLockProposal}
+                    disabled={lockingProposal}
+                    type="button"
+                  >
+                    {lockingProposal ? 'Locking…' : 'Finalize voting (lock all fields)'}
+                  </button>
+                  <span className={styles.manageHint}>
+                    Locks each field to its winning option.
+                  </span>
+                </div>
               )}
-            </div>
-          )}
+              {lockMessage && <p className={styles.manageNote}>{lockMessage}</p>}
 
-          {actionError && <p className={styles.errorMsg}>{actionError}</p>}
+              <div className={styles.manageRow}>
+                {autoArchived ? (
+                  <p className={styles.manageNote}>
+                    Auto-archived because the event date has passed. It stays in the Archived
+                    view for everyone.
+                  </p>
+                ) : (
+                  <button
+                    className={styles.manageBtn}
+                    onClick={() => toggleArchive(!manuallyArchived)}
+                    disabled={archiving}
+                    type="button"
+                  >
+                    {archiving ? 'Saving…' : manuallyArchived ? 'Unarchive' : 'Archive'}
+                  </button>
+                )}
+
+                {!autoArchived && (
+                  <span className={styles.manageHint}>Archiving only hides it for you.</span>
+                )}
+              </div>
+
+              {isCreator && (
+                <div className={styles.deleteRow}>
+                  {confirmingDelete ? (
+                    <>
+                      <span className={styles.manageHint}>
+                        Delete permanently? This removes all comments, responsibilities, and
+                        activity.
+                      </span>
+                      <div className={styles.deleteActions}>
+                        <button
+                          className={styles.deleteConfirmBtn}
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          type="button"
+                        >
+                          {deleting ? 'Deleting…' : 'Delete permanently'}
+                        </button>
+                        <button
+                          className={styles.cancelBtn}
+                          onClick={() => setConfirmingDelete(false)}
+                          disabled={deleting}
+                          type="button"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      className={styles.deleteBtn}
+                      onClick={() => setConfirmingDelete(true)}
+                      type="button"
+                    >
+                      Delete proposal
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {actionError && <p className={styles.errorMsg}>{actionError}</p>}
+            </>
+          )}
         </section>
       </main>
     </div>
@@ -951,6 +1233,7 @@ function VotingField({
   resolvedValue,
   userId,
   isCreator,
+  frozen = false,
   onVote,
   onAddOption,
   onLock,
@@ -962,6 +1245,9 @@ function VotingField({
 
   const options = voting.options ?? []
   const locked = !!voting.votingLocked
+  // `frozen` (proposal completed) freezes voting without marking the field
+  // resolved: options/votes stay visible read-only, but no changes are allowed.
+  const interactive = !locked && !frozen
   const leaders = getLeaders(options)
   const uniqueLeader = leaders.length === 1 ? leaders[0] : null
 
@@ -989,6 +1275,8 @@ function VotingField({
             </span>
             <span className={styles.lockedBadge}>Locked</span>
           </div>
+        ) : frozen ? (
+          <span className={styles.votingHint}>Voting closed — proposal completed.</span>
         ) : (
           <span className={styles.votingHint}>Vote to decide this field.</span>
         )}
@@ -1002,7 +1290,7 @@ function VotingField({
             const count = (o.votes ?? []).length
             return (
               <li key={o.id} className={styles.optionRow}>
-                {!locked && (
+                {interactive && (
                   <button
                     type="button"
                     className={`${styles.voteBtn} ${voted ? styles.voteBtnActive : ''}`}
@@ -1016,7 +1304,7 @@ function VotingField({
                 <span className={styles.optionCount}>
                   {count} {count === 1 ? 'vote' : 'votes'}
                 </span>
-                {isCreator && !locked && (
+                {isCreator && interactive && (
                   <button
                     type="button"
                     className={styles.pickBtn}
@@ -1031,7 +1319,7 @@ function VotingField({
           })}
         </ul>
 
-        {!locked && (
+        {interactive && (
           <form
             className={styles.optionAddForm}
             onSubmit={(e) => {
@@ -1057,7 +1345,7 @@ function VotingField({
           </form>
         )}
 
-        {isCreator && !locked && (
+        {isCreator && interactive && (
           <div className={styles.creatorControls}>
             {uniqueLeader ? (
               <button
@@ -1080,28 +1368,4 @@ function VotingField({
       </div>
     </div>
   )
-}
-
-function dueDateLabel(dueDate) {
-  if (!dueDate) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDate)
-  due.setHours(0, 0, 0, 0)
-  const days = Math.round((due - today) / 86400000)
-  if (days < 0) return { text: `${Math.abs(days)}d overdue`, level: 'danger' }
-  if (days === 0) return { text: 'Due today', level: 'warn' }
-  if (days <= 3) return { text: `${days}d left`, level: 'warn' }
-  return { text: `${days}d left`, level: 'normal' }
-}
-
-function DueBadge({ dueDate }) {
-  const info = dueDateLabel(dueDate)
-  if (!info) return null
-  const cls = [
-    styles.dueBadge,
-    info.level === 'danger' ? styles.dueBadgeDanger : '',
-    info.level === 'warn' ? styles.dueBadgeWarn : ''
-  ].filter(Boolean).join(' ')
-  return <span className={cls}>{info.text}</span>
 }

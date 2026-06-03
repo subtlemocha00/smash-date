@@ -8,7 +8,9 @@ import GroupImage from '../components/GroupImage'
 import {
   createProposal,
   subscribeToGroupProposals,
-  isArchivedForUser
+  isArchivedForUser,
+  isProposalComplete,
+  isDismissedForUser
 } from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
 import {
@@ -17,6 +19,8 @@ import {
   markAllNotificationsRead,
   createNotificationsForGroup
 } from '../services/firebase/notifications'
+import { subscribeToResponsibilitiesForProposals } from '../services/firebase/responsibilities'
+import { proposalUrgency, URGENCY_ORDER } from '../utils/urgency'
 import styles from './DashboardPage.module.css'
 
 const STATUS_LABELS = {
@@ -40,6 +44,13 @@ function formatDate(ts) {
   return ts.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// Proposal dates are plain YYYY-MM-DD strings (not Firestore timestamps).
+function formatProposalDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export default function DashboardPage() {
   const { user, userProfile } = useAuth()
   const { groupsLoading, activeGroupId, activeGroup } = useGroups()
@@ -53,6 +64,8 @@ export default function DashboardPage() {
   const [notifLoading, setNotifLoading] = useState(true)
   const [markingAllRead, setMarkingAllRead] = useState(false)
   const [notifCollapsed, setNotifCollapsed] = useState(false)
+
+  const [myResponsibilities, setMyResponsibilities] = useState([])
 
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
@@ -96,6 +109,20 @@ export default function DashboardPage() {
     return unsub
   }, [user?.uid])
 
+  // Stable dependency for the responsibilities listener: the set of loaded
+  // proposal IDs (sorted so order changes don't re-subscribe).
+  const proposalIdsKey = proposals.map((p) => p.id).sort().join(',')
+
+  useEffect(() => {
+    const ids = proposalIdsKey ? proposalIdsKey.split(',') : []
+    const unsub = subscribeToResponsibilitiesForProposals(
+      ids,
+      (items) => setMyResponsibilities(items),
+      () => setMyResponsibilities([])
+    )
+    return unsub
+  }, [proposalIdsKey])
+
   if (!userProfile) return null
 
   const hasGroup = !!activeGroup
@@ -105,15 +132,42 @@ export default function DashboardPage() {
   const groupNotifications = notifications.filter((n) => n.groupId === activeGroupId)
   const unreadCount = groupNotifications.filter((n) => !n.read).length
 
+  // Proposals a user removed from their own archive disappear from their view
+  // entirely (but stay for everyone else).
+  const myProposals = proposals.filter((p) => !isDismissedForUser(p, user.uid))
+
   // Archive is evaluated per current user (manual archive is user-scoped;
-  // auto-archive is derived from status/date and identical for everyone).
-  const activeProposals = proposals.filter((p) => !isArchivedForUser(p, user.uid))
-  const archivedProposals = proposals.filter((p) => isArchivedForUser(p, user.uid))
+  // auto-archive is derived from the date and identical for everyone).
+  const activeProposals = myProposals.filter((p) => !isArchivedForUser(p, user.uid))
+  const archivedProposals = myProposals.filter((p) => isArchivedForUser(p, user.uid))
   const visibleProposals = showArchived ? archivedProposals : activeProposals
 
   const pendingActions = activeProposals.filter((p) =>
     ['proposed', 'changes_requested', 'accepted'].includes(p.status)
   )
+
+  // "My Responsibilities": tasks assigned to the current user, joined to the
+  // active group's proposals so we can show the proposal title/date. Urgency
+  // comes from the proposal date (see proposalUrgency), not the assignment.
+  // The listener loads responsibilities for all loaded proposals (any assignee),
+  // so we filter to the current user here. Completed tasks and those whose
+  // proposal isn't loaded are dropped; the rest sort most-urgent first.
+  const proposalsById = new Map(myProposals.map((p) => [p.id, p]))
+  const myResponsibilityItems = myResponsibilities
+    .filter((r) => r.assignedTo === user.uid && !r.completed)
+    .map((r) => {
+      const proposal = proposalsById.get(r.proposalId)
+      if (!proposal) return null
+      return { responsibility: r, proposal, urgency: proposalUrgency(proposal.date) }
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const order = URGENCY_ORDER[a.urgency.level] - URGENCY_ORDER[b.urgency.level]
+      if (order !== 0) return order
+      const ad = a.urgency.days ?? Infinity
+      const bd = b.urgency.days ?? Infinity
+      return ad - bd
+    })
 
   async function handleCreateProposal(e) {
     e.preventDefault()
@@ -226,6 +280,42 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {/* My Responsibilities — tasks assigned to the current user, emphasis
+            scaled by how soon the proposal date is. Distinct from the activity
+            feed and notifications. */}
+        {hasGroup && (
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>My Responsibilities</h2>
+            </div>
+            {myResponsibilityItems.length === 0 ? (
+              <p className={styles.muted}>Nothing assigned to you right now.</p>
+            ) : (
+              <ul className={styles.respList}>
+                {myResponsibilityItems.map(({ responsibility, proposal, urgency }) => (
+                  <li key={responsibility.id}>
+                    <Link
+                      to={`/proposal/${proposal.id}`}
+                      className={`${styles.respRow} ${styles[`resp_${urgency.level}`]}`}
+                    >
+                      <span className={styles.respMain}>
+                        <span className={styles.respTitle}>{responsibility.title}</span>
+                        <span className={styles.respProposal}>{proposal.title}</span>
+                      </span>
+                      <span className={styles.respMeta}>
+                        <span className={styles.respUrgency}>{urgency.label}</span>
+                        {proposal.date && (
+                          <span className={styles.respDate}>{formatProposalDate(proposal.date)}</span>
+                        )}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         {/* Notifications */}
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
@@ -280,9 +370,6 @@ export default function DashboardPage() {
                         </Link>
                       ) : (
                         n.message
-                      )}
-                      {n.type === 'responsibility_assigned' && n.dueDate && (
-                        <DueBadge dueDate={n.dueDate} />
                       )}
                     </span>
                     <span className={styles.notifTime}>{formatDate(n.createdAt)}</span>
@@ -372,19 +459,25 @@ export default function DashboardPage() {
             </p>
           ) : (
             <ul className={styles.proposalList}>
-              {visibleProposals.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/proposal/${p.id}`} className={styles.proposalRow}>
-                    <span className={styles.proposalTitle}>{p.title}</span>
-                    <span className={styles.proposalMeta}>
-                      <span className={`${styles.statusBadge} ${styles[`status_${p.status}`]}`}>
-                        {STATUS_LABELS[p.status] ?? p.status}
+              {visibleProposals.map((p) => {
+                // Completion is derived from the date (day after the event), so
+                // show it even though the stored status is still e.g. confirmed.
+                const status =
+                  isProposalComplete(p) && p.status !== 'declined' ? 'completed' : p.status
+                return (
+                  <li key={p.id}>
+                    <Link to={`/proposal/${p.id}`} className={styles.proposalRow}>
+                      <span className={styles.proposalTitle}>{p.title}</span>
+                      <span className={styles.proposalMeta}>
+                        <span className={`${styles.statusBadge} ${styles[`status_${status}`]}`}>
+                          {STATUS_LABELS[status] ?? status}
+                        </span>
+                        <span className={styles.proposalDate}>{formatDate(p.updatedAt)}</span>
                       </span>
-                      <span className={styles.proposalDate}>{formatDate(p.updatedAt)}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           )}
             </>
@@ -393,28 +486,4 @@ export default function DashboardPage() {
       </main>
     </div>
   )
-}
-
-function dueDateLabel(dueDate) {
-  if (!dueDate) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDate)
-  due.setHours(0, 0, 0, 0)
-  const days = Math.round((due - today) / 86400000)
-  if (days < 0) return { text: `${Math.abs(days)}d overdue`, level: 'danger' }
-  if (days === 0) return { text: 'Due today', level: 'warn' }
-  if (days <= 3) return { text: `${days}d left`, level: 'warn' }
-  return { text: `${days}d left`, level: 'normal' }
-}
-
-function DueBadge({ dueDate }) {
-  const info = dueDateLabel(dueDate)
-  if (!info) return null
-  const cls = [
-    styles.dueBadge,
-    info.level === 'danger' ? styles.dueBadgeDanger : '',
-    info.level === 'warn' ? styles.dueBadgeWarn : ''
-  ].filter(Boolean).join(' ')
-  return <span className={cls}>{info.text}</span>
 }

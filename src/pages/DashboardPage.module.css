@@ -234,6 +234,123 @@
   font-weight: var(--weight-medium);
 }
 
+/* My Responsibilities — emphasis escalates with the urgency level (left accent
+   width/color, urgency label color/weight, and a faint themed tint for the most
+   urgent states). Backgrounds use color-mix so they adapt to light/dark. */
+
+.respList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.respRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.respRow:hover {
+  background: var(--surface-2);
+}
+
+.respMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.respTitle {
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.respProposal {
+  font-size: 12px;
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.respMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.respUrgency {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.respDate {
+  font-size: 11px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+}
+
+/* Low / none: neutral, subtle. */
+.resp_none .respUrgency,
+.resp_low .respUrgency {
+  color: var(--fg-subtle);
+}
+
+/* Medium (7–14 days). */
+.resp_medium {
+  border-left-color: var(--azure-600);
+}
+.resp_medium .respUrgency {
+  color: var(--azure-700);
+}
+
+/* High (1–6 days). */
+.resp_high {
+  border-left-color: var(--pollen-600);
+}
+.resp_high .respUrgency {
+  color: var(--pollen-700);
+}
+
+/* Today: highest upcoming emphasis. */
+.resp_today {
+  border-left-width: 4px;
+  border-left-color: var(--pollen-600);
+  background: color-mix(in oklch, var(--pollen) 12%, var(--surface));
+}
+.resp_today .respUrgency {
+  color: var(--pollen-700);
+  font-weight: var(--weight-semibold);
+}
+
+/* Overdue: past the proposal date. */
+.resp_overdue {
+  border-left-width: 4px;
+  border-left-color: var(--coral-500);
+  background: color-mix(in oklch, var(--coral) 10%, var(--surface));
+}
+.resp_overdue .respUrgency {
+  color: var(--coral-700);
+  font-weight: var(--weight-semibold);
+}
+
 /* Notifications */
 
 .notifList {
@@ -284,33 +401,6 @@
   color: var(--fg-faint);
   font-family: var(--font-mono);
   flex-shrink: 0;
-}
-
-/* Due date badge (responsibility notifications) */
-
-.dueBadge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: var(--weight-medium);
-  line-height: 1;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--fg-subtle);
-  white-space: nowrap;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-.dueBadgeWarn {
-  background: var(--pollen-050);
-  color: var(--pollen-700);
-}
-
-.dueBadgeDanger {
-  background: var(--coral-050);
-  color: var(--coral-700);
 }
 
 /* Active / Archived tabs */

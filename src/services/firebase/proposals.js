@@ -29,9 +29,15 @@ export async function createProposal(groupId, userId, title) {
     budget: '',
     notes: '',
     status: 'draft',
-    // Per-user manual archive. Auto-archive (completed / past date) is derived,
+    // Per-member acceptance: a proposal can only be confirmed once every group
+    // member's uid appears here. Reset whenever the plan changes (see callers).
+    acceptedBy: [],
+    // Per-user manual archive. Auto-archive (completion / past date) is derived,
     // not stored — see isArchivedForUser below.
     archivedByUserIds: [],
+    // Per-user removal of a completed proposal from one's own archive. Hides it
+    // for that user only; everyone else still sees it.
+    dismissedByUserIds: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   })
@@ -54,6 +60,58 @@ export async function setProposalArchivedForUser(proposalId, userId, archived) {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Status flow & acceptance
+//
+//   draft → proposed → (every member accepts) → accepted → (creator) confirmed
+//                                                          → [date passes] → complete (derived)
+//
+// Acceptance is per-member (acceptedBy). A proposal auto-advances to `accepted`
+// only when every member's uid is present, and the creator alone may confirm.
+// Acceptances reset whenever the plan returns to a state members must re-approve.
+// ---------------------------------------------------------------------------
+
+// Records the caller's acceptance. If this makes acceptance unanimous, the
+// proposal advances to `accepted` in the same write. `acceptedBy`/`memberIds`
+// are the latest values from the realtime listener so we can detect unanimity.
+export async function acceptProposal(proposalId, userId, memberIds, acceptedBy) {
+  const next = Array.from(new Set([...(acceptedBy ?? []), userId]))
+  const unanimous = memberIds.length > 0 && memberIds.every((m) => next.includes(m))
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    acceptedBy: arrayUnion(userId),
+    ...(unanimous ? { status: 'accepted' } : {}),
+    updatedAt: serverTimestamp()
+  })
+}
+
+// Withdraws the caller's acceptance. Acceptance is no longer unanimous, so the
+// proposal returns to `proposed` (safe to set even if already proposed).
+export async function revokeAcceptance(proposalId, userId) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    acceptedBy: arrayRemove(userId),
+    status: 'proposed',
+    updatedAt: serverTimestamp()
+  })
+}
+
+// Generic status move, optionally clearing acceptances. Acceptances are reset
+// on any transition that sends the plan back for (re)approval.
+export async function transitionProposal(proposalId, status, { resetAcceptances = false } = {}) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    status,
+    ...(resetAcceptances ? { acceptedBy: [] } : {}),
+    updatedAt: serverTimestamp()
+  })
+}
+
+// Per-user removal of a completed proposal from one's own archive. Like manual
+// archive, it only touches the caller's entry and doesn't bump updatedAt.
+export async function dismissProposalForUser(proposalId, userId, dismissed) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    dismissedByUserIds: dismissed ? arrayUnion(userId) : arrayRemove(userId)
+  })
+}
+
 // True when the proposal's date/time exists and is in the past. date is a
 // YYYY-MM-DD string and time an optional HH:MM string (both as written in the
 // editor). Missing time means end-of-day so a same-day plan stays active.
@@ -64,15 +122,34 @@ export function isProposalPast(proposal) {
   return dt.getTime() < Date.now()
 }
 
-// System auto-archive: applies globally to every user because it's derived
-// purely from shared fields (status + date), so no write or sync is needed.
+// A proposal is "complete" once the day AFTER its event date has begun — i.e.
+// the event is over. Date-only (time is ignored): an event dated today stays
+// upcoming all day and only completes at midnight tomorrow. Completion is
+// derived, never stored: this app has no scheduler, so it's computed on read.
+export function isProposalComplete(proposal) {
+  if (!proposal?.date) return false
+  const eventDay = new Date(`${proposal.date}T00:00:00`)
+  if (Number.isNaN(eventDay.getTime())) return false
+  const dayAfter = new Date(eventDay)
+  dayAfter.setDate(dayAfter.getDate() + 1)
+  return Date.now() >= dayAfter.getTime()
+}
+
+// System auto-archive: a proposal leaves the active list once it's complete.
+// Derived from the shared date, so it applies to every user with no write.
 export function isAutoArchived(proposal) {
-  return proposal?.status === 'completed' || isProposalPast(proposal)
+  return isProposalComplete(proposal)
 }
 
 export function isArchivedForUser(proposal, userId) {
   if (isAutoArchived(proposal)) return true
   return (proposal?.archivedByUserIds ?? []).includes(userId)
+}
+
+// A completed proposal that this user removed from their own archive. Personal
+// and non-destructive: it only hides the proposal for them.
+export function isDismissedForUser(proposal, userId) {
+  return (proposal?.dismissedByUserIds ?? []).includes(userId)
 }
 
 // Permanently removes a proposal and everything scoped to it (comments,

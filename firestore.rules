@@ -91,14 +91,56 @@ service cloud.firestore {
     }
 
     match /proposals/{proposalId} {
+      // The caller is the proposal's creator (legacy docs predate createdBy).
+      function isProposalDocCreator() {
+        return ('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid;
+      }
+
+      // acceptedBy may only gain/lose the caller's own uid, or be fully reset to
+      // [] (an edit/transition clearing all approvals — can't forge acceptance).
+      function acceptedByChangeIsSelfOrReset() {
+        let before = ('acceptedBy' in resource.data) ? resource.data.acceptedBy : [];
+        let after = ('acceptedBy' in request.resource.data) ? request.resource.data.acceptedBy : [];
+        return after == before
+          || after.size() == 0
+          || (after.removeAll(before).hasOnly([request.auth.uid])
+              && before.removeAll(after).hasOnly([request.auth.uid]));
+      }
+
+      // dismissedByUserIds may only gain/lose the caller's own uid.
+      function dismissedChangeIsSelf() {
+        let before = ('dismissedByUserIds' in resource.data) ? resource.data.dismissedByUserIds : [];
+        let after = ('dismissedByUserIds' in request.resource.data) ? request.resource.data.dismissedByUserIds : [];
+        return after == before
+          || (after.removeAll(before).hasOnly([request.auth.uid])
+              && before.removeAll(after).hasOnly([request.auth.uid]));
+      }
+
       allow read: if isGroupMember(resource.data.groupId);
       // Only group members may create proposals.
       allow create: if isAuth() && isGroupMember(request.resource.data.groupId);
       // Members may update proposal fields, but groupId is immutable after creation.
       // FIX (MEDIUM): was `allow read, update, delete` with no field constraints — groupId could be changed.
-      // (Per-user manual archive writes only archivedByUserIds, allowed here.)
+      //
+      // Status flow guarantees (completion itself is derived from the date on the
+      // client — there's no scheduler — so it isn't enforced here):
+      //  * Confirming is creator-only, and a confirmed proposal is frozen to
+      //    everyone but the creator (who can reopen it).
+      //  * acceptedBy may only be changed for one's own uid (you can't accept on
+      //    behalf of others); a full reset to [] is allowed (edits/transitions).
+      //  * dismissedByUserIds may only be changed for one's own uid.
+      //  * Per-user manual archive writes only archivedByUserIds, allowed here.
       allow update: if isGroupMember(resource.data.groupId)
-        && request.resource.data.groupId == resource.data.groupId;
+        && request.resource.data.groupId == resource.data.groupId
+        // A confirmed proposal is locked to everyone but the creator.
+        && (resource.data.status != 'confirmed' || isProposalDocCreator())
+        // Confirming (→ confirmed) is creator-only.
+        && (
+          !(request.resource.data.status == 'confirmed' && resource.data.status != 'confirmed')
+          || isProposalDocCreator()
+        )
+        && acceptedByChangeIsSelfOrReset()
+        && dismissedChangeIsSelf();
       // Only the proposal's creator may delete it; the group owner may also
       // remove it (e.g. as part of deleting the whole group).
       allow delete: if isGroupMember(resource.data.groupId) && (

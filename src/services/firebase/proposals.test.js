@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   isProposalPast,
+  isProposalComplete,
   isAutoArchived,
   isArchivedForUser,
+  isDismissedForUser,
   getLeaders,
   allMembersVoted,
   computeVotingChanges,
@@ -46,24 +48,39 @@ describe('isProposalPast', () => {
   })
 })
 
+describe('isProposalComplete', () => {
+  it('is false without a valid date', () => {
+    expect(isProposalComplete({ date: '' })).toBe(false)
+    expect(isProposalComplete({})).toBe(false)
+    expect(isProposalComplete({ date: 'not-a-date' })).toBe(false)
+  })
+
+  it('is true only once the day after the event date has begun', () => {
+    expect(isProposalComplete({ date: dateStr(-2) })).toBe(true)
+    expect(isProposalComplete({ date: dateStr(-1) })).toBe(true)
+  })
+
+  it('is false on the event day itself and in the future', () => {
+    expect(isProposalComplete({ date: dateStr(0) })).toBe(false)
+    expect(isProposalComplete({ date: dateStr(1) })).toBe(false)
+  })
+})
+
 describe('isAutoArchived', () => {
-  it('archives completed proposals regardless of date', () => {
-    expect(isAutoArchived({ status: 'completed', date: dateStr(5) })).toBe(true)
+  it('archives proposals whose date has passed (completed)', () => {
+    expect(isAutoArchived({ status: 'confirmed', date: dateStr(-1) })).toBe(true)
   })
 
-  it('archives proposals whose date has passed', () => {
-    expect(isAutoArchived({ status: 'confirmed', date: dateStr(-1), time: '12:00' })).toBe(true)
-  })
-
-  it('does not archive active future proposals', () => {
+  it('does not archive the event day or future/undated proposals', () => {
+    expect(isAutoArchived({ status: 'confirmed', date: dateStr(0) })).toBe(false)
     expect(isAutoArchived({ status: 'proposed', date: dateStr(3) })).toBe(false)
     expect(isAutoArchived({ status: 'draft', date: '' })).toBe(false)
   })
 })
 
 describe('isArchivedForUser', () => {
-  it('is true when auto-archived, for any user', () => {
-    const p = { status: 'completed', archivedByUserIds: [] }
+  it('is true when auto-archived (date passed), for any user', () => {
+    const p = { status: 'confirmed', date: dateStr(-1), archivedByUserIds: [] }
     expect(isArchivedForUser(p, 'anyone')).toBe(true)
   })
 
@@ -75,6 +92,18 @@ describe('isArchivedForUser', () => {
 
   it('handles a missing archivedByUserIds field', () => {
     expect(isArchivedForUser({ status: 'proposed', date: dateStr(5) }, 'alice')).toBe(false)
+  })
+})
+
+describe('isDismissedForUser', () => {
+  it('is user-scoped', () => {
+    const p = { dismissedByUserIds: ['alice'] }
+    expect(isDismissedForUser(p, 'alice')).toBe(true)
+    expect(isDismissedForUser(p, 'bob')).toBe(false)
+  })
+
+  it('handles a missing dismissedByUserIds field', () => {
+    expect(isDismissedForUser({}, 'alice')).toBe(false)
   })
 })
 

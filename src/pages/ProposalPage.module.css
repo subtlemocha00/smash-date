@@ -365,6 +365,61 @@
   gap: 8px;
 }
 
+/* Explanatory line above/below the workflow buttons (acceptance progress,
+   waiting states, etc.). */
+.statusHint {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0 0 10px;
+}
+
+.statusHint:last-child {
+  margin-bottom: 0;
+}
+
+/* Inline "lock anyway?" confirmation shown when the creator confirms before
+   every member has accepted. */
+.confirmLockRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.confirmLockRow .statusHint {
+  margin: 0;
+}
+
+/* Low-emphasis action (undo acceptance, request changes, reopen) — sits beside
+   the primary status buttons without competing with them. */
+.statusBtnGhost {
+  font-family: var(--font-body);
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: var(--weight-medium);
+  background: transparent;
+  color: var(--fg-muted);
+  transition: background 0.12s ease;
+}
+
+.statusBtnGhost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.statusBtnGhost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .statusBtn {
   font-family: var(--font-body);
   font-size: 13px;
@@ -544,64 +599,6 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--fg-muted);
-}
-
-/* Due date badge */
-
-.dueBadge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: var(--weight-medium);
-  line-height: 1;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-2);
-  color: var(--fg-subtle);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.dueBadgeWarn {
-  background: var(--pollen-050);
-  color: var(--pollen-700);
-}
-
-.dueBadgeDanger {
-  background: var(--coral-050);
-  color: var(--coral-700);
-}
-
-/* Due date input in add-responsibility form */
-
-.dateLabel {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex-shrink: 0;
-}
-
-.dateLabelText {
-  font-size: 11px;
-  color: var(--fg-subtle);
-  line-height: 1;
-}
-
-.dateInput {
-  font-family: var(--font-body);
-  padding: 0.45rem 0.6rem;
-  font-size: 13px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
-  outline: none;
-  cursor: pointer;
-}
-
-.dateInput:focus {
-  border-color: var(--fg);
-  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .removeBtn {
@@ -786,6 +783,16 @@
   white-space: nowrap;
   background: var(--st-draft-bg);
   color: var(--st-draft-fg);
+}
+
+/* Shown where the Edit button / delegation controls would be when a proposal
+   is completed and therefore locked. */
+.lockedNote {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .manageRow {

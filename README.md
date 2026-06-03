@@ -270,7 +270,7 @@ Rules live in `firestore.rules` and enforce:
 - Firestore user profile auto-created on first sign-in, with a graceful fallback if the profile can't be loaded.
 - Light/dark theme with no flash-of-wrong-theme (applied pre-paint).
 - Multi-group membership: create, join by invite code, switch active group, rename, remove members, delete group (owner-only).
-- Dashboard: group switcher, "Needs Attention" list, per-group notifications with unread badge and mark-all-read, realtime proposals list.
+- Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), per-group notifications with unread badge and mark-all-read, realtime proposals list.
 - Proposal creation (title required; all other fields optional) and full field editing with a "Saved" confirmation.
 - Proposal status system with explicit transitions and in-flight disabling.
 - Responsibilities with assignee and completion toggle; comments; per-proposal activity feed.
