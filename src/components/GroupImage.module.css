@@ -15,14 +15,26 @@
   width: 100%;
 }
 
-.image {
-  display: block;
+/* Clips the (optionally zoomed) image to the banner. Separate from .imageBlock
+   so the controls menu can overflow past the banner without being cut off. */
+.imageClip {
+  position: relative;
   width: 100%;
   height: 160px;
-  object-fit: cover;
+  overflow: hidden;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface-2);
+}
+
+/* Centered via an inline translate(-50%, -50%); width/height/transform are set
+   inline from the measured cover-fit + zoom + pan (see GroupImage.jsx). */
+.image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  max-width: none;
 }
 
 /* Collapsible controls widget, top-right of the image */

@@ -35,10 +35,6 @@ import {
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
-import {
-  createNotification,
-  createNotificationsForGroup
-} from '../services/firebase/notifications'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -232,16 +228,6 @@ export default function ProposalPage() {
         'fields_updated',
         `${userProfile.displayName || 'Someone'} updated the proposal details`
       )
-      if (memberIds.length > 0) {
-        await createNotificationsForGroup(
-          memberIds,
-          user.uid,
-          'proposal_updated',
-          `${userProfile.displayName || 'Someone'} updated the proposal: ${editFields.title.trim()}`,
-          id,
-          proposal.groupId
-        )
-      }
       setEditing(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
@@ -252,25 +238,15 @@ export default function ProposalPage() {
     }
   }
 
-  // Runs a status/acceptance action under a single busy key, logging it to the
-  // activity feed and optionally notifying the group.
-  async function runAction(key, work, { activity, notify } = {}) {
+  // Runs a status/acceptance action under a single busy key, then logs it to the
+  // proposal's activity feed.
+  async function runAction(key, work, activity) {
     if (busyAction) return
     setStatusError('')
     setBusyAction(key)
     try {
       await work()
       if (activity) await logActivity(id, 'status_changed', activity)
-      if (notify && memberIds.length > 0) {
-        await createNotificationsForGroup(
-          memberIds,
-          user.uid,
-          'status_changed',
-          notify,
-          id,
-          proposal.groupId
-        )
-      }
     } catch {
       setStatusError('Action failed. Please try again.')
     } finally {
@@ -279,70 +255,70 @@ export default function ProposalPage() {
   }
 
   const actorName = userProfile.displayName || 'Someone'
-  const proposalTitle = proposal?.title || 'a proposal'
 
   function handlePropose() {
-    runAction('propose', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
-      activity: `${actorName} proposed this date`,
-      notify: `${actorName} proposed a date: ${proposalTitle}`
-    })
+    runAction(
+      'propose',
+      () => transitionProposal(id, 'proposed', { resetAcceptances: true }),
+      `${actorName} proposed this date`
+    )
   }
 
   function handleAccept() {
     const acceptedBy = proposal.acceptedBy ?? []
-    const willBeUnanimous =
-      memberIds.length > 0 && memberIds.every((m) => m === user.uid || acceptedBy.includes(m))
-    runAction('accept', () => acceptProposal(id, user.uid, memberIds, acceptedBy), {
-      activity: `${actorName} accepted the proposal`,
-      notify: willBeUnanimous
-        ? `Everyone accepted ${proposalTitle} — ready to confirm`
-        : undefined
-    })
+    runAction(
+      'accept',
+      () => acceptProposal(id, user.uid, memberIds, acceptedBy),
+      `${actorName} accepted the proposal`
+    )
   }
 
   function handleRevokeAcceptance() {
-    runAction('revoke', () => revokeAcceptance(id, user.uid), {
-      activity: `${actorName} withdrew their acceptance`
-    })
+    runAction(
+      'revoke',
+      () => revokeAcceptance(id, user.uid),
+      `${actorName} withdrew their acceptance`
+    )
   }
 
   function handleConfirm() {
-    runAction('confirm', () => transitionProposal(id, 'confirmed'), {
-      activity: `${actorName} confirmed the proposal`,
-      notify: `${actorName} confirmed and locked in: ${proposalTitle}`
-    })
+    runAction(
+      'confirm',
+      () => transitionProposal(id, 'confirmed'),
+      `${actorName} confirmed the proposal`
+    )
   }
 
   function handleRequestChanges() {
     runAction(
       'changes',
       () => transitionProposal(id, 'changes_requested', { resetAcceptances: true }),
-      {
-        activity: `${actorName} requested changes`,
-        notify: `${actorName} requested changes on: ${proposalTitle}`
-      }
+      `${actorName} requested changes`
     )
   }
 
   function handleDecline() {
-    runAction('decline', () => transitionProposal(id, 'declined', { resetAcceptances: true }), {
-      activity: `${actorName} declined the proposal`,
-      notify: `${actorName} declined: ${proposalTitle}`
-    })
+    runAction(
+      'decline',
+      () => transitionProposal(id, 'declined', { resetAcceptances: true }),
+      `${actorName} declined the proposal`
+    )
   }
 
   function handleRepropose() {
-    runAction('repropose', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
-      activity: `${actorName} re-proposed this date`,
-      notify: `${actorName} re-proposed: ${proposalTitle}`
-    })
+    runAction(
+      'repropose',
+      () => transitionProposal(id, 'proposed', { resetAcceptances: true }),
+      `${actorName} re-proposed this date`
+    )
   }
 
   function handleReopen() {
-    runAction('reopen', () => transitionProposal(id, 'proposed', { resetAcceptances: true }), {
-      activity: `${actorName} reopened the proposal for editing`,
-      notify: `${actorName} reopened ${proposalTitle} for editing`
-    })
+    runAction(
+      'reopen',
+      () => transitionProposal(id, 'proposed', { resetAcceptances: true }),
+      `${actorName} reopened the proposal for editing`
+    )
   }
 
   async function handleDismiss() {
@@ -439,16 +415,6 @@ export default function ProposalPage() {
         'comment_added',
         `${userProfile.displayName || 'Someone'} added a comment`
       )
-      if (memberIds.length > 0) {
-        await createNotificationsForGroup(
-          memberIds,
-          user.uid,
-          'comment_added',
-          `${userProfile.displayName || 'Someone'} commented on: ${proposal?.title || 'a proposal'}`,
-          id,
-          proposal.groupId
-        )
-      }
       setCommentText('')
     } catch {
       setCommentError('Failed to post comment. Please try again.')
@@ -472,15 +438,6 @@ export default function ProposalPage() {
           ? `${userProfile.displayName || 'Someone'} assigned "${respTitle.trim()}" to ${assigneeName}`
           : `${userProfile.displayName || 'Someone'} added "${respTitle.trim()}"`
       )
-      if (respAssignee && respAssignee !== user.uid) {
-        await createNotification(
-          respAssignee,
-          'responsibility_assigned',
-          `${userProfile.displayName || 'Someone'} assigned you "${respTitle.trim()}" on ${proposal?.title || 'a proposal'}`,
-          id,
-          proposal.groupId
-        )
-      }
       setRespTitle('')
       setRespAssignee('')
     } catch {
@@ -506,15 +463,6 @@ export default function ProposalPage() {
         ? `${userProfile.displayName || 'Someone'} reassigned "${r.title}" to ${newName}`
         : `${userProfile.displayName || 'Someone'} unassigned "${r.title}"`
       await logActivity(id, 'responsibility_assigned', actMsg)
-      if (newUid && newUid !== user.uid) {
-        await createNotification(
-          newUid,
-          'responsibility_assigned',
-          `${userProfile.displayName || 'Someone'} assigned you "${r.title}" on ${proposal?.title || 'a proposal'}`,
-          id,
-          proposal.groupId
-        )
-      }
       setReassigningRespId(null)
     } catch {
       setReassigningRespId(null)

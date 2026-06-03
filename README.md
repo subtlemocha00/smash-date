@@ -8,7 +8,7 @@ A collaborative planning app for couples (and small groups) to propose, discuss,
 
 Smash Date reduces the friction of planning shared experiences. One member creates a proposal, others review and refine it, and the group confirms once ready.
 
-**MVP Scope:** Auth, groups, proposals, comments, responsibilities, activity feed, in-app notifications.
+**MVP Scope:** Auth, groups, proposals, comments, responsibilities, activity feed.
 
 The data model is group-based (`memberIds[]`) throughout, so a user can belong to multiple groups even though the typical case is a couple.
 
@@ -59,7 +59,7 @@ src/
     GroupContext.jsx             # Groups, activeGroupId, setActiveGroup, exposes useGroups()
   pages/
     LoginPage.jsx / .module.css        # Email/password + Google sign-in, register, password reset
-    DashboardPage.jsx / .module.css    # Group switcher, needs-attention, notifications, proposals
+    DashboardPage.jsx / .module.css    # Group switcher, needs-attention, my responsibilities, proposals
     ProposalPage.jsx / .module.css     # Proposal detail — fields, status, responsibilities, activity, comments
     SettingsPage.jsx / .module.css     # Account info, theme, group management, sign out
   services/
@@ -73,8 +73,6 @@ src/
       comments.js             # addComment, subscribeToComments
       responsibilities.js     # addResponsibility, toggleResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
-      notifications.js        # createNotification, createNotificationsForGroup, subscribeToUserNotifications,
-                              #   markNotificationRead, markAllNotificationsRead
   styles/
     global.css      # Design tokens, light/dark themes, reset, .loading-screen utility
 ```
@@ -214,22 +212,6 @@ Lookup table — lets authenticated users resolve an invite code to a group ID w
 
 Append-only audit log (no update rule; only the group owner may delete entries).
 
-### `notifications/{notificationId}`
-
-```js
-{
-  userId: string,              // recipient
-  type: 'proposal_created' | 'proposal_updated' | 'status_changed' | 'comment_added' | 'responsibility_assigned',
-  message: string,
-  proposalId: string | null,
-  groupId: string | null,      // scopes the dashboard's per-group notification view
-  read: boolean,
-  createdAt: Timestamp
-}
-```
-
-Notifications are created client-side by group members for other group members (not via Cloud Functions). Read/update/delete are scoped to the recipient.
-
 ---
 
 ## 6. Proposal Status Machine
@@ -257,7 +239,6 @@ Rules live in `firestore.rules` and enforce:
 - **Group invites** are readable by any authenticated user (needed to join); only the referenced group's owner may create or delete one.
 - **Proposals / comments / responsibilities** are scoped to group membership. `groupId` (proposals) and `proposalId` / `userId` (comments, responsibilities) are immutable on update.
 - **Activity events** are append-only; only the group owner may delete them.
-- **Notifications** can be created only by a member of the referenced group, and read/updated/deleted only by the recipient.
 
 ---
 
@@ -270,18 +251,17 @@ Rules live in `firestore.rules` and enforce:
 - Firestore user profile auto-created on first sign-in, with a graceful fallback if the profile can't be loaded.
 - Light/dark theme with no flash-of-wrong-theme (applied pre-paint).
 - Multi-group membership: create, join by invite code, switch active group, rename, remove members, delete group (owner-only).
-- Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), per-group notifications with unread badge and mark-all-read, realtime proposals list.
+- Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), realtime proposals list.
 - Proposal creation (title required; all other fields optional) and full field editing with a "Saved" confirmation.
 - Proposal status system with explicit transitions and in-flight disabling.
 - Responsibilities with assignee and completion toggle; comments; per-proposal activity feed.
-- In-app notifications for proposal created/updated, status changed, comment added, and responsibility assigned.
 - Empty states and error states throughout (failed saves, failed status updates, failed comments, failed/denied Firestore reads).
 - Duplicate-submission guards on all create/update forms.
 - Firestore security rules covering every collection.
 
 ### Not Implemented (intentionally out of MVP scope)
 
-- Push notifications (in-app only).
+- Notifications (in-app or push) — proposal events surface in each proposal's activity feed instead.
 - Calendar / external integrations, analytics, AI features.
 - Per-proposal delete UI (proposals are removed only when their group is deleted).
 - Display-name editing.
@@ -291,7 +271,6 @@ Rules live in `firestore.rules` and enforce:
 ## 9. Known Limitations
 
 - **Member names:** other members appear by name only after they've opened the app at least once (which records their `memberNames` entry); until then `GroupManager` shows a short `User xxxxxx` fallback.
-- **Client-created notifications:** delivery depends on the acting user's client completing the writes; there is no server-side guarantee.
 - **Group deletion** runs as a single Firestore batch (capped at 500 writes), which assumes a group's total document count stays modest. True at the app's intended scale.
 - **No automated tests yet** — Vitest is configured but no test files exist.
 - **Lint warnings:** `npm run lint` passes with three non-blocking `react-refresh/only-export-components` warnings on the context files (each exports a provider component plus its hook). This is the standard React Context pattern; the rule is intentionally set to `warn`.

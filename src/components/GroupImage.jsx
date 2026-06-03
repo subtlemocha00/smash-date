@@ -4,7 +4,7 @@ import { useGroups } from '../context/GroupContext'
 import {
   uploadGroupImage,
   removeGroupImage,
-  setGroupImagePosition
+  setGroupImageFraming
 } from '../services/firebase/groups'
 import styles from './GroupImage.module.css'
 
@@ -12,6 +12,10 @@ const ALLOWED_TYPES = ['image/png', 'image/jpeg']
 const MAX_BYTES = 15 * 1024 * 1024 // 15 MB
 const MAX_DIMENSION = 3000 // px, per side
 const DEFAULT_POSITION = '50% 50%'
+const DEFAULT_SCALE = 1
+const MIN_SCALE = 1 // 100% — fits the banner (zooming out would expose gaps)
+const MAX_SCALE = 3 // 300%
+const BANNER_HEIGHT = 160 // px — must match .imageClip height in the stylesheet
 
 function messageForError(err) {
   const code = err?.code || ''
@@ -47,6 +51,11 @@ function clampPercent(n) {
   return Math.min(100, Math.max(0, n))
 }
 
+function clampScale(n) {
+  if (Number.isNaN(n)) return DEFAULT_SCALE
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, n))
+}
+
 // Parses a "x% y%" object-position string into [x, y] numbers (defaults 50/50).
 function parsePosition(value) {
   const m = /(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%/.exec(value || '')
@@ -59,6 +68,7 @@ export default function GroupImage() {
   const { activeGroup } = useGroups()
   const fileRef = useRef(null)
   const menuRef = useRef(null)
+  const clipRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -66,7 +76,14 @@ export default function GroupImage() {
   const [repositioning, setRepositioning] = useState(false)
   const [posX, setPosX] = useState(50)
   const [posY, setPosY] = useState(50)
+  const [scale, setScale] = useState(DEFAULT_SCALE)
   const [savingPos, setSavingPos] = useState(false)
+
+  // The banner's rendered width and the image's natural size let us pan with a
+  // clamped translate (so X and Y both work, unlike object-position which only
+  // pans the single axis that `cover` happens to overflow).
+  const [containerW, setContainerW] = useState(0)
+  const [natural, setNatural] = useState(null)
 
   // Collapse the controls widget when tapping/clicking anywhere outside it.
   useEffect(() => {
@@ -80,11 +97,32 @@ export default function GroupImage() {
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [menuOpen])
 
+  // Track the banner's width (responsive) so pan offsets stay in real pixels.
+  // Keyed on the image URL so it re-attaches when the banner appears/changes.
+  // Also reads the image's natural size here in case it was already cached
+  // (a cached <img> can finish loading before React's onLoad can fire).
+  useEffect(() => {
+    const el = clipRef.current
+    if (!el) return
+    setContainerW(el.clientWidth)
+    const img = el.querySelector('img')
+    // Clear stale dimensions, then adopt the new image's if it's already loaded.
+    setNatural(
+      img?.complete && img.naturalWidth ? { w: img.naturalWidth, h: img.naturalHeight } : null
+    )
+    const ro = new ResizeObserver((entries) => {
+      setContainerW(entries[0].contentRect.width)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [activeGroup?.groupImageUrl])
+
   if (!activeGroup) return null
 
   const isCreator = activeGroup.createdBy === user?.uid
   const imageUrl = activeGroup.groupImageUrl || null
   const savedPosition = activeGroup.groupImagePosition || DEFAULT_POSITION
+  const savedScale = clampScale(Number(activeGroup.groupImageScale) || DEFAULT_SCALE)
 
   // Non-creator with no image sees nothing at all — no placeholder, no spacing.
   if (!imageUrl && !isCreator) return null
@@ -147,6 +185,7 @@ export default function GroupImage() {
     const [x, y] = parsePosition(savedPosition)
     setPosX(x)
     setPosY(y)
+    setScale(savedScale)
     setError('')
     setRepositioning(true)
   }
@@ -159,7 +198,7 @@ export default function GroupImage() {
     setSavingPos(true)
     setError('')
     try {
-      await setGroupImagePosition(activeGroup.id, `${posX}% ${posY}%`)
+      await setGroupImageFraming(activeGroup.id, `${posX}% ${posY}%`, scale)
       setRepositioning(false)
     } catch (err) {
       setError(messageForError(err))
@@ -168,7 +207,38 @@ export default function GroupImage() {
     }
   }
 
-  const livePosition = repositioning ? `${posX}% ${posY}%` : savedPosition
+  const [savedX, savedY] = parsePosition(savedPosition)
+  const livePosX = repositioning ? posX : savedX
+  const livePosY = repositioning ? posY : savedY
+  const liveScale = repositioning ? scale : savedScale
+
+  // Cover-fit the image to the banner, apply the zoom, then translate by the
+  // pan — clamped to the overflow so edges never reveal empty space. Both axes
+  // pan whenever there's overflow (X needs zoom, or a wider-than-banner image).
+  // Before the natural size is known we fall back to plain cover + position.
+  let imageStyle
+  if (natural && containerW > 0) {
+    const coverScale = Math.max(containerW / natural.w, BANNER_HEIGHT / natural.h)
+    const renderedW = natural.w * coverScale * liveScale
+    const renderedH = natural.h * coverScale * liveScale
+    const overflowX = Math.max(0, renderedW - containerW)
+    const overflowY = Math.max(0, renderedH - BANNER_HEIGHT)
+    const tx = (0.5 - livePosX / 100) * overflowX
+    const ty = (0.5 - livePosY / 100) * overflowY
+    imageStyle = {
+      width: `${renderedW}px`,
+      height: `${renderedH}px`,
+      transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`
+    }
+  } else {
+    imageStyle = {
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      objectPosition: `${livePosX}% ${livePosY}%`,
+      transform: 'translate(-50%, -50%)'
+    }
+  }
 
   return (
     <div className={styles.wrap}>
@@ -183,12 +253,17 @@ export default function GroupImage() {
       {imageUrl ? (
         <>
           <div className={styles.imageBlock}>
-            <img
-              src={imageUrl}
-              alt={`${activeGroup.name || 'Group'} photo`}
-              className={styles.image}
-              style={{ objectPosition: livePosition }}
-            />
+            <div className={styles.imageClip} ref={clipRef}>
+              <img
+                src={imageUrl}
+                alt={`${activeGroup.name || 'Group'} photo`}
+                className={styles.image}
+                style={imageStyle}
+                onLoad={(e) =>
+                  setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })
+                }
+              />
+            </div>
             {isCreator && !repositioning && (
               <div className={styles.menu} ref={menuRef}>
                 <button
@@ -223,7 +298,7 @@ export default function GroupImage() {
                       disabled={busy}
                       type="button"
                     >
-                      Reposition
+                      Adjust
                     </button>
                     <button
                       className={styles.btnDanger}
@@ -266,6 +341,17 @@ export default function GroupImage() {
                   className={styles.slider}
                 />
               </label>
+              <label className={styles.sliderRow}>
+                <span className={styles.sliderLabel}>Size</span>
+                <input
+                  type="range"
+                  min={MIN_SCALE * 100}
+                  max={MAX_SCALE * 100}
+                  value={Math.round(scale * 100)}
+                  onChange={(e) => setScale(clampScale(Number(e.target.value) / 100))}
+                  className={styles.slider}
+                />
+              </label>
               <div className={styles.repositionActions}>
                 <button
                   className={styles.btn}
@@ -273,7 +359,7 @@ export default function GroupImage() {
                   disabled={savingPos}
                   type="button"
                 >
-                  {savingPos ? 'Saving…' : 'Save position'}
+                  {savingPos ? 'Saving…' : 'Save'}
                 </button>
                 <button
                   className={styles.btn}

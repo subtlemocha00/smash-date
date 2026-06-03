@@ -13,12 +13,6 @@ import {
   isDismissedForUser
 } from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
-import {
-  subscribeToUserNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  createNotificationsForGroup
-} from '../services/firebase/notifications'
 import { subscribeToResponsibilitiesForProposals } from '../services/firebase/responsibilities'
 import { proposalUrgency, URGENCY_ORDER } from '../utils/urgency'
 import styles from './DashboardPage.module.css'
@@ -60,11 +54,6 @@ export default function DashboardPage() {
   const [proposalsLoading, setProposalsLoading] = useState(true)
   const [proposalsError, setProposalsError] = useState('')
 
-  const [notifications, setNotifications] = useState([])
-  const [notifLoading, setNotifLoading] = useState(true)
-  const [markingAllRead, setMarkingAllRead] = useState(false)
-  const [notifCollapsed, setNotifCollapsed] = useState(false)
-
   const [myResponsibilities, setMyResponsibilities] = useState([])
 
   const [showNewForm, setShowNewForm] = useState(false)
@@ -96,19 +85,6 @@ export default function DashboardPage() {
     return unsub
   }, [activeGroupId])
 
-  useEffect(() => {
-    if (!user?.uid) return
-    const unsub = subscribeToUserNotifications(
-      user.uid,
-      (items) => {
-        setNotifications(items)
-        setNotifLoading(false)
-      },
-      () => setNotifLoading(false)
-    )
-    return unsub
-  }, [user?.uid])
-
   // Stable dependency for the responsibilities listener: the set of loaded
   // proposal IDs (sorted so order changes don't re-subscribe).
   const proposalIdsKey = proposals.map((p) => p.id).sort().join(',')
@@ -126,11 +102,6 @@ export default function DashboardPage() {
   if (!userProfile) return null
 
   const hasGroup = !!activeGroup
-
-  // Notifications are stored per-user across all groups; show only those tied to
-  // the active group.
-  const groupNotifications = notifications.filter((n) => n.groupId === activeGroupId)
-  const unreadCount = groupNotifications.filter((n) => !n.read).length
 
   // Proposals a user removed from their own archive disappear from their view
   // entirely (but stay for everyone else).
@@ -182,29 +153,10 @@ export default function DashboardPage() {
         'proposal_created',
         `${userProfile.displayName || 'Someone'} created this proposal`
       )
-      if (activeGroup?.memberIds) {
-        await createNotificationsForGroup(
-          activeGroup.memberIds,
-          user.uid,
-          'proposal_created',
-          `${userProfile.displayName || 'Someone'} created a new proposal: ${newTitle.trim()}`,
-          proposalId,
-          activeGroupId
-        )
-      }
       navigate(`/proposal/${proposalId}`)
     } catch {
       setCreateError('Failed to create proposal. Please try again.')
       setCreating(false)
-    }
-  }
-
-  async function handleMarkAllRead() {
-    setMarkingAllRead(true)
-    try {
-      await markAllNotificationsRead(groupNotifications)
-    } finally {
-      setMarkingAllRead(false)
     }
   }
 
@@ -229,9 +181,6 @@ export default function DashboardPage() {
           <span className={styles.logoDot}>.</span>
         </span>
         <div className={styles.headerRight}>
-          {unreadCount > 0 && (
-            <span className={styles.notifCount}>{unreadCount}</span>
-          )}
           <Link to="/settings" className={styles.navLink}>Settings</Link>
           <button className={styles.signOutBtn} onClick={logOut} type="button">
             Sign Out
@@ -281,8 +230,8 @@ export default function DashboardPage() {
         )}
 
         {/* My Responsibilities — tasks assigned to the current user, emphasis
-            scaled by how soon the proposal date is. Distinct from the activity
-            feed and notifications. */}
+            scaled by how soon the proposal date is. Distinct from the per-proposal
+            activity feed. */}
         {hasGroup && (
           <section className={styles.section}>
             <div className={styles.sectionHeader}>
@@ -315,70 +264,6 @@ export default function DashboardPage() {
             )}
           </section>
         )}
-
-        {/* Notifications */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <button
-              className={styles.collapseToggle}
-              onClick={() => setNotifCollapsed((c) => !c)}
-              aria-expanded={!notifCollapsed}
-              type="button"
-            >
-              <span
-                className={`${styles.collapseChevron} ${notifCollapsed ? styles.collapseChevronClosed : ''}`}
-                aria-hidden="true"
-              />
-              <span className={styles.sectionTitle}>
-                Notifications
-                {unreadCount > 0 && (
-                  <span className={styles.sectionBadge}>{unreadCount} new</span>
-                )}
-              </span>
-            </button>
-            {!notifCollapsed && unreadCount > 0 && (
-              <button
-                className={styles.textBtn}
-                onClick={handleMarkAllRead}
-                disabled={markingAllRead}
-                type="button"
-              >
-                {markingAllRead ? 'Marking…' : 'Mark all read'}
-              </button>
-            )}
-          </div>
-          {!notifCollapsed && (
-            notifLoading ? (
-              <p className={styles.muted}>Loading…</p>
-            ) : groupNotifications.length === 0 ? (
-              <p className={styles.muted}>You&apos;re all caught up.</p>
-            ) : (
-              <ul className={styles.notifList}>
-                {groupNotifications.slice(0, 5).map((n) => (
-                  <li
-                    key={n.id}
-                    className={`${styles.notifItem} ${!n.read ? styles.notifUnread : ''}`}
-                  >
-                    <span className={styles.notifBody}>
-                      {n.proposalId ? (
-                        <Link
-                          to={`/proposal/${n.proposalId}`}
-                          className={styles.notifLink}
-                          onClick={() => !n.read && markNotificationRead(n.id)}
-                        >
-                          {n.message}
-                        </Link>
-                      ) : (
-                        n.message
-                      )}
-                    </span>
-                    <span className={styles.notifTime}>{formatDate(n.createdAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            )
-          )}
-        </section>
 
         {/* Proposals */}
         <section className={styles.section}>

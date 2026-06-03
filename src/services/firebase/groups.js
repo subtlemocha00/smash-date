@@ -175,11 +175,19 @@ export async function removeGroupImage(groupId, ownerUid) {
   } catch (err) {
     if (err?.code !== 'storage/object-not-found') throw err
   }
-  await updateDoc(doc(db, 'groups', groupId), { groupImageUrl: null, groupImagePosition: null })
+  await updateDoc(doc(db, 'groups', groupId), {
+    groupImageUrl: null,
+    groupImagePosition: null,
+    groupImageScale: null
+  })
 }
 
-// Creator-only. Stores the image focal point as a CSS object-position string
-// (e.g. "50% 30%") on the group so every member sees the same framing.
-export async function setGroupImagePosition(groupId, position) {
-  await updateDoc(doc(db, 'groups', groupId), { groupImagePosition: position })
+// Creator-only. Stores the image framing so every member sees the same view:
+// the focal point as a CSS object-position string (e.g. "50% 30%") and a zoom
+// scale (1 = fit-to-banner, higher = zoomed in).
+export async function setGroupImageFraming(groupId, position, scale) {
+  await updateDoc(doc(db, 'groups', groupId), {
+    groupImagePosition: position,
+    groupImageScale: scale
+  })
 }

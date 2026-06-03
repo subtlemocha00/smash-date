@@ -205,15 +205,5 @@ service cloud.firestore {
           get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
         );
     }
-
-    match /notifications/{notificationId} {
-      allow read, update, delete: if request.auth != null
-        && request.auth.uid == resource.data.userId;
-      // Only group members may create notifications referencing their group.
-      // FIX (HIGH): was `if isAuth()` — any user could spam notifications to any other user.
-      allow create: if isAuth()
-        && isGroupMember(request.resource.data.groupId)
-        && request.resource.data.userId != null;
-    }
   }
 }
