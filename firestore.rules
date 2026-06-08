@@ -116,6 +116,26 @@ service cloud.firestore {
               && before.removeAll(after).hasOnly([request.auth.uid]));
       }
 
+      // archivedByUserIds may only gain/lose the caller's own uid.
+      function archivedChangeIsSelf() {
+        let before = ('archivedByUserIds' in resource.data) ? resource.data.archivedByUserIds : [];
+        let after = ('archivedByUserIds' in request.resource.data) ? request.resource.data.archivedByUserIds : [];
+        return after == before
+          || (after.removeAll(before).hasOnly([request.auth.uid])
+              && before.removeAll(after).hasOnly([request.auth.uid]));
+      }
+
+      // A purely personal view-state write: the diff touches only the caller's
+      // own entry in archivedByUserIds / dismissedByUserIds. These are per-user
+      // and never edit shared content, so they're allowed even on a confirmed
+      // (otherwise locked) proposal.
+      function isOwnArchiveDismissOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['archivedByUserIds', 'dismissedByUserIds'])
+          && archivedChangeIsSelf()
+          && dismissedChangeIsSelf();
+      }
+
       allow read: if isGroupMember(resource.data.groupId);
       // Only group members may create proposals.
       allow create: if isAuth() && isGroupMember(request.resource.data.groupId);
@@ -132,8 +152,10 @@ service cloud.firestore {
       //  * Per-user manual archive writes only archivedByUserIds, allowed here.
       allow update: if isGroupMember(resource.data.groupId)
         && request.resource.data.groupId == resource.data.groupId
-        // A confirmed proposal is locked to everyone but the creator.
-        && (resource.data.status != 'confirmed' || isProposalDocCreator())
+        // A confirmed proposal is locked to everyone but the creator — except for
+        // a purely personal archive/dismiss write, which any member may make on
+        // their own behalf (e.g. removing a completed proposal from their archive).
+        && (resource.data.status != 'confirmed' || isProposalDocCreator() || isOwnArchiveDismissOnly())
         // Confirming (→ confirmed) is creator-only.
         && (
           !(request.resource.data.status == 'confirmed' && resource.data.status != 'confirmed')
