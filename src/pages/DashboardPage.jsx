@@ -121,8 +121,9 @@ export default function DashboardPage() {
   // active group's proposals so we can show the proposal title/date. Urgency
   // comes from the proposal date (see proposalUrgency), not the assignment.
   // The listener loads responsibilities for all loaded proposals (any assignee),
-  // so we filter to the current user here. Completed tasks and those whose
-  // proposal isn't loaded are dropped; the rest sort most-urgent first.
+  // so we filter to the current user here. Completed tasks, those whose proposal
+  // isn't loaded, and those whose proposal date has already passed (overdue) are
+  // dropped; the rest sort most-urgent first.
   const proposalsById = new Map(myProposals.map((p) => [p.id, p]))
   const myResponsibilityItems = myResponsibilities
     .filter((r) => r.assignedTo === user.uid && !r.completed)
@@ -132,6 +133,9 @@ export default function DashboardPage() {
       return { responsibility: r, proposal, urgency: proposalUrgency(proposal.date) }
     })
     .filter(Boolean)
+    // Once the proposal date has passed there's nothing left to prepare, so the
+    // responsibility no longer surfaces here (no overdue items).
+    .filter(({ urgency }) => urgency.level !== 'overdue')
     .sort((a, b) => {
       const order = URGENCY_ORDER[a.urgency.level] - URGENCY_ORDER[b.urgency.level]
       if (order !== 0) return order
