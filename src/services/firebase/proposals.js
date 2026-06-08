@@ -38,6 +38,13 @@ export async function createProposal(groupId, userId, title) {
     // Per-user removal of a completed proposal from one's own archive. Hides it
     // for that user only; everyone else still sees it.
     dismissedByUserIds: [],
+    // Decision Deadline: the point at which collaboration closes and the plan
+    // becomes the agreed-upon, read-only version. `locked` is the creator's
+    // manual switch; once `decisionDeadline` passes the proposal is also treated
+    // as locked (derived on read — no scheduler). See isProposalLocked below.
+    decisionDeadline: null,
+    locked: false,
+    lockedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   })
@@ -152,6 +159,58 @@ export function isDismissedForUser(proposal, userId) {
   return (proposal?.dismissedByUserIds ?? []).includes(userId)
 }
 
+// ---------------------------------------------------------------------------
+// Decision Deadline / collaboration lock
+//
+// A proposal's collaboration is "locked" once the creator locks it manually
+// (locked === true) OR its decision deadline has passed. Like completion, the
+// deadline lock is derived on read — there is no scheduler — so it takes effect
+// the moment the proposal is next loaded or interacted with. Legacy proposals
+// predate these fields and are simply never locked.
+// ---------------------------------------------------------------------------
+
+// True once the proposal's decision deadline (a Timestamp) has been reached.
+export function isDeadlinePassed(proposal, now = Date.now()) {
+  const dl = proposal?.decisionDeadline
+  if (!dl?.toMillis) return false
+  return now >= dl.toMillis()
+}
+
+export function isProposalLocked(proposal, now = Date.now()) {
+  return proposal?.locked === true || isDeadlinePassed(proposal, now)
+}
+
+// Creator sets or clears the decision deadline. `deadline` is a JS Date (stored
+// as a Timestamp) or null to clear. Setting a deadline doesn't lock immediately
+// — the lock is derived once it passes (isProposalLocked).
+export async function setDecisionDeadline(proposalId, deadline) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    decisionDeadline: deadline ?? null,
+    updatedAt: serverTimestamp()
+  })
+}
+
+// Creator closes collaboration now, regardless of any deadline.
+export async function lockProposal(proposalId) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    locked: true,
+    lockedAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  })
+}
+
+// Creator reopens collaboration. Clears the manual lock AND any deadline — a
+// deadline already in the past would otherwise re-lock the proposal instantly —
+// returning it to normal collaborative behavior.
+export async function reopenProposal(proposalId) {
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    locked: false,
+    lockedAt: null,
+    decisionDeadline: null,
+    updatedAt: serverTimestamp()
+  })
+}
+
 // Permanently removes a proposal and everything scoped to it (comments,
 // responsibilities, activity events) in one atomic batch. Mirrors deleteGroup:
 // Firestore evaluates each delete against pre-batch state, so the membership
@@ -228,8 +287,19 @@ export function subscribeToProposal(proposalId, callback, onError) {
 // stay plain-text only.
 export const VOTABLE_FIELDS = ['date', 'time', 'activity', 'location', 'childcareNotes', 'budget']
 
-export function createFieldOption(value) {
-  return { id: crypto.randomUUID(), value, votes: [] }
+// An option records its author (createdBy) so the UI can let that person edit or
+// delete their own suggestion while voting is open. Legacy options predate the
+// field and simply carry createdBy: null (no owner controls shown).
+export function createFieldOption(value, createdBy = null) {
+  return { id: crypto.randomUUID(), value, votes: [], createdBy }
+}
+
+// Time options read best in chronological order. HTML time inputs produce 24h
+// "HH:MM" strings, which already sort chronologically as plain strings, so a
+// value sort suffices. Other fields keep their insertion order.
+export function sortOptionsForField(field, options) {
+  if (field !== 'time') return options
+  return [...options].sort((a, b) => (a.value || '').localeCompare(b.value || ''))
 }
 
 export function getFieldVoting(proposal, field) {
@@ -264,7 +334,7 @@ export function allMembersVoted(options, memberIds) {
 // Builds the dot-path payload that enables/disables voting per field, to merge
 // into an edit save. Enabling seeds the first option from the current value (if
 // any); disabling removes the field's voting entry entirely (full revert).
-export function computeVotingChanges(proposal, plainFields, toggles) {
+export function computeVotingChanges(proposal, plainFields, toggles, userId = null) {
   const changes = {}
   for (const field of VOTABLE_FIELDS) {
     const wasEnabled = !!proposal?.voting?.[field]?.allowVoting
@@ -274,7 +344,7 @@ export function computeVotingChanges(proposal, plainFields, toggles) {
       changes[`voting.${field}`] = {
         allowVoting: true,
         votingLocked: false,
-        options: seed ? [createFieldOption(seed)] : []
+        options: seed ? [createFieldOption(seed, userId)] : []
       }
     } else if (!nowEnabled && wasEnabled) {
       changes[`voting.${field}`] = deleteField()
@@ -284,9 +354,11 @@ export function computeVotingChanges(proposal, plainFields, toggles) {
 }
 
 // One vote per field: removes the user from every option, then adds them to the
-// chosen one (re-voting the same option toggles it off). If this completes
-// participation with a single leader, the field auto-resolves in the same write.
-export async function castVote(proposalId, field, optionId, userId, options, memberIds) {
+// chosen one (re-voting the same option toggles it off). Voting stays open — a
+// field only resolves and locks when the creator locks it (lockFieldToLeader,
+// resolveFieldTo, or lockProposalVoting). Until then members may freely change
+// or undo their vote.
+export async function castVote(proposalId, field, optionId, userId, options) {
   const newOptions = (options ?? []).map((o) => {
     const others = (o.votes ?? []).filter((v) => v !== userId)
     if (o.id !== optionId) return { ...o, votes: others }
@@ -294,19 +366,34 @@ export async function castVote(proposalId, field, optionId, userId, options, mem
     return { ...o, votes: alreadyHere ? others : [...others, userId] }
   })
 
-  const payload = { [`voting.${field}.options`]: newOptions }
-  if (allMembersVoted(newOptions, memberIds)) {
-    const leaders = getLeaders(newOptions)
-    if (leaders.length === 1) {
-      payload[field] = leaders[0].value
-      payload[`voting.${field}.votingLocked`] = true
-    }
-  }
-  await updateDoc(doc(db, 'proposals', proposalId), payload)
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    [`voting.${field}.options`]: newOptions
+  })
 }
 
-export async function addFieldOption(proposalId, field, value, options) {
-  const newOptions = [...(options ?? []), createFieldOption(value.trim())]
+export async function addFieldOption(proposalId, field, value, options, userId) {
+  const newOptions = [...(options ?? []), createFieldOption(value.trim(), userId)]
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    [`voting.${field}.options`]: sortOptionsForField(field, newOptions)
+  })
+}
+
+// Edits a single option's value, preserving its id, votes, and author. The
+// caller restricts this to the option's own author while voting is open; the
+// result is re-sorted so time options stay in chronological order after an edit.
+export async function updateFieldOption(proposalId, field, optionId, value, options) {
+  const newOptions = (options ?? []).map((o) =>
+    o.id === optionId ? { ...o, value: value.trim() } : o
+  )
+  await updateDoc(doc(db, 'proposals', proposalId), {
+    [`voting.${field}.options`]: sortOptionsForField(field, newOptions)
+  })
+}
+
+// Removes a single option (its votes go with it). Gated by the caller so only
+// the option's author may remove it while voting is open.
+export async function removeFieldOption(proposalId, field, optionId, options) {
+  const newOptions = (options ?? []).filter((o) => o.id !== optionId)
   await updateDoc(doc(db, 'proposals', proposalId), {
     [`voting.${field}.options`]: newOptions
   })

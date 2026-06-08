@@ -175,10 +175,17 @@ Lookup table — lets authenticated users resolve an invite code to a group ID w
   budget: string,
   notes: string,
   status: 'draft' | 'proposed' | 'changes_requested' | 'accepted' | 'confirmed' | 'completed' | 'declined',
+  decisionDeadline: Timestamp | null, // when collaboration closes (optional)
+  locked: boolean,                    // creator's manual collaboration lock
+  lockedAt: Timestamp | null,         // when it was manually locked
   createdAt: Timestamp,
   updatedAt: Timestamp
 }
 ```
+
+Fields not listed for older proposals (`decisionDeadline`, `locked`, `lockedAt`,
+`acceptedBy`, `archivedByUserIds`, `dismissedByUserIds`) are treated as absent /
+`false` / `[]` on read, so existing documents need no migration.
 
 ### `comments/{commentId}`
 
@@ -228,6 +235,26 @@ Append-only audit log (no update rule; only the group owner may delete entries).
 
 All status changes are explicit user actions. No automatic transitions.
 
+### Decision Deadline (collaboration lock)
+
+Independent of the status machine, a proposal creator can set a **Decision
+Deadline** — the point at which collaboration ends and the plan becomes the
+agreed-upon, read-only version.
+
+- A proposal is **locked** when the creator locks it manually (`locked === true`)
+  **or** its `decisionDeadline` has passed. The deadline lock is derived on read
+  (like completion) — there is no scheduler — so it takes effect the next time
+  the proposal is loaded or interacted with.
+- **When locked**, the proposal is read-only for regular members: editing,
+  voting/suggestions, and comments are disabled. Everyone can still view the
+  proposal, its responsibilities, and its activity history. (Responsibilities,
+  being task execution rather than planning, remain usable.)
+- **Only the creator** may set/clear the deadline, lock manually, or reopen.
+  Reopening sets `locked = false` **and clears the deadline** (a deadline already
+  in the past would otherwise re-lock instantly), restoring normal collaboration.
+
+This is enforced both in the UI and in Firestore rules (see below).
+
 ---
 
 ## 7. Security Rules
@@ -238,6 +265,7 @@ Rules live in `firestore.rules` and enforce:
 - **Groups** are readable only by members. Create requires the creator to be a member and to set `createdBy` to themselves. Updates are limited to: the owner (rename / remove members / general edits), a valid-invite holder adding only themselves (`isSelfJoin`), or any member writing only their own `memberNames` entry (`isOwnNameUpdate`). Delete is owner-only.
 - **Group invites** are readable by any authenticated user (needed to join); only the referenced group's owner may create or delete one.
 - **Proposals / comments / responsibilities** are scoped to group membership. `groupId` (proposals) and `proposalId` / `userId` (comments, responsibilities) are immutable on update.
+- **Decision Deadline / lock** (proposals): the `locked`, `lockedAt`, and `decisionDeadline` fields may only be changed by the proposal creator. While a proposal is locked (manual lock or a passed `decisionDeadline`, evaluated against `request.time`), it is read-only to everyone but the creator — except for a member's own personal archive/dismiss write. Comment creation is blocked while the parent proposal is locked.
 - **Activity events** are append-only; only the group owner may delete them.
 
 ---
@@ -254,6 +282,7 @@ Rules live in `firestore.rules` and enforce:
 - Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), realtime proposals list.
 - Proposal creation (title required; all other fields optional) and full field editing with a "Saved" confirmation.
 - Proposal status system with explicit transitions and in-flight disabling.
+- **Decision Deadline:** creators set a date/time (or lock manually) after which collaboration closes and the proposal goes read-only for other members; creators can reopen to resume. Enforced in the UI and Firestore rules.
 - Responsibilities with assignee and completion toggle; comments; per-proposal activity feed.
 - Empty states and error states throughout (failed saves, failed status updates, failed comments, failed/denied Firestore reads).
 - Duplicate-submission guards on all create/update forms.

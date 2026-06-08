@@ -8,8 +8,17 @@ import {
   getLeaders,
   allMembersVoted,
   computeVotingChanges,
-  isFieldVotingActive
+  isFieldVotingActive,
+  createFieldOption,
+  sortOptionsForField,
+  isDeadlinePassed,
+  isProposalLocked
 } from './proposals'
+
+// A Firestore Timestamp stub — only toMillis() is used by the lock helpers.
+function ts(ms) {
+  return { toMillis: () => ms }
+}
 
 // Minimal option/voting fixtures for the field-voting helpers.
 function opt(id, value, votes = []) {
@@ -107,6 +116,43 @@ describe('isDismissedForUser', () => {
   })
 })
 
+describe('isDeadlinePassed', () => {
+  const now = 1_000_000
+
+  it('is false with no deadline', () => {
+    expect(isDeadlinePassed({}, now)).toBe(false)
+    expect(isDeadlinePassed({ decisionDeadline: null }, now)).toBe(false)
+    expect(isDeadlinePassed(null, now)).toBe(false)
+  })
+
+  it('is true once now has reached the deadline', () => {
+    expect(isDeadlinePassed({ decisionDeadline: ts(now - 1) }, now)).toBe(true)
+    expect(isDeadlinePassed({ decisionDeadline: ts(now) }, now)).toBe(true)
+  })
+
+  it('is false while the deadline is still in the future', () => {
+    expect(isDeadlinePassed({ decisionDeadline: ts(now + 1) }, now)).toBe(false)
+  })
+})
+
+describe('isProposalLocked', () => {
+  const now = 1_000_000
+
+  it('is true when manually locked, regardless of deadline', () => {
+    expect(isProposalLocked({ locked: true }, now)).toBe(true)
+    expect(isProposalLocked({ locked: true, decisionDeadline: ts(now + 5000) }, now)).toBe(true)
+  })
+
+  it('is true when the deadline has passed even if not manually locked', () => {
+    expect(isProposalLocked({ locked: false, decisionDeadline: ts(now - 1) }, now)).toBe(true)
+  })
+
+  it('is false when open and the deadline (if any) is in the future', () => {
+    expect(isProposalLocked({ locked: false, decisionDeadline: ts(now + 1) }, now)).toBe(false)
+    expect(isProposalLocked({}, now)).toBe(false)
+  })
+})
+
 describe('getLeaders', () => {
   it('returns [] when no votes have been cast', () => {
     expect(getLeaders([opt('a', 'X'), opt('b', 'Y')])).toEqual([])
@@ -183,5 +229,44 @@ describe('computeVotingChanges', () => {
     const proposal = { voting: { location: { allowVoting: true, options: [] } } }
     const changes = computeVotingChanges(proposal, { location: 'X' }, { location: true })
     expect(changes).toEqual({})
+  })
+
+  it('stamps the seeded option with the enabling user as author', () => {
+    const changes = computeVotingChanges({}, { location: 'Pizza Place' }, { location: true }, 'alice')
+    expect(changes['voting.location'].options[0].createdBy).toBe('alice')
+  })
+})
+
+describe('createFieldOption', () => {
+  it('records the author and starts with no votes', () => {
+    const o = createFieldOption('1:30 PM', 'alice')
+    expect(o).toMatchObject({ value: '1:30 PM', votes: [], createdBy: 'alice' })
+    expect(typeof o.id).toBe('string')
+  })
+
+  it('defaults createdBy to null for unauthored (legacy-style) options', () => {
+    expect(createFieldOption('x').createdBy).toBe(null)
+  })
+})
+
+describe('sortOptionsForField', () => {
+  it('orders time options earliest to latest by their 24h value', () => {
+    const options = [opt('a', '19:30'), opt('b', '08:00'), opt('c', '13:30')]
+    expect(sortOptionsForField('time', options).map((o) => o.value)).toEqual([
+      '08:00',
+      '13:30',
+      '19:30'
+    ])
+  })
+
+  it('leaves non-time fields in their existing order', () => {
+    const options = [opt('a', 'Sushi'), opt('b', 'Pizza')]
+    expect(sortOptionsForField('location', options).map((o) => o.value)).toEqual(['Sushi', 'Pizza'])
+  })
+
+  it('does not mutate the input array', () => {
+    const options = [opt('a', '19:30'), opt('b', '08:00')]
+    sortOptionsForField('time', options)
+    expect(options.map((o) => o.value)).toEqual(['19:30', '08:00'])
   })
 })

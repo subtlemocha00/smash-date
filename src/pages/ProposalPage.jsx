@@ -11,6 +11,10 @@ import {
   isAutoArchived,
   isArchivedForUser,
   isProposalComplete,
+  isProposalLocked,
+  setDecisionDeadline,
+  lockProposal,
+  reopenProposal,
   acceptProposal,
   revokeAcceptance,
   transitionProposal,
@@ -22,6 +26,8 @@ import {
   getLeaders,
   castVote,
   addFieldOption,
+  updateFieldOption,
+  removeFieldOption,
   lockFieldToLeader,
   resolveFieldTo,
   lockProposalVoting
@@ -70,6 +76,15 @@ function formatTime(ts) {
   })
 }
 
+// Formats a Firestore Timestamp into the local "YYYY-MM-DDTHH:MM" string a
+// <input type="datetime-local"> expects. Returns '' when there's no deadline.
+function toDatetimeLocal(ts) {
+  if (!ts?.toDate) return ''
+  const d = ts.toDate()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function ProposalPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -94,6 +109,12 @@ export default function ProposalPage() {
 
   const [lockingProposal, setLockingProposal] = useState(false)
   const [lockMessage, setLockMessage] = useState('')
+
+  // Decision Deadline controls (creator-only). deadlineInput mirrors the stored
+  // deadline in <input type="datetime-local"> format.
+  const [deadlineInput, setDeadlineInput] = useState('')
+  const [deadlineBusy, setDeadlineBusy] = useState(false)
+  const [deadlineError, setDeadlineError] = useState('')
 
   const [statusError, setStatusError] = useState('')
   const [busyAction, setBusyAction] = useState('')
@@ -182,6 +203,20 @@ export default function ProposalPage() {
     setConfirmingLock(false)
   }, [proposal?.status])
 
+  // Likewise, a manual collaboration lock closes the editor for everyone.
+  useEffect(() => {
+    if (proposal?.locked === true) setEditing(false)
+  }, [proposal?.locked])
+
+  // Keep the deadline input in sync with the stored deadline. Keyed on the
+  // millisecond value so it only resets when the saved deadline actually changes
+  // (not on every snapshot), preserving in-progress typing.
+  const deadlineMillis = proposal?.decisionDeadline?.toMillis?.() ?? null
+  useEffect(() => {
+    setDeadlineInput(toDatetimeLocal(proposal?.decisionDeadline))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deadlineMillis])
+
   function startEditing() {
     setEditFields({
       title: proposal.title || '',
@@ -215,7 +250,7 @@ export default function ProposalPage() {
     setSaving(true)
     setSaveError('')
     try {
-      const votingChanges = computeVotingChanges(proposal, editFields, votingToggles)
+      const votingChanges = computeVotingChanges(proposal, editFields, votingToggles, user.uid)
       // Editing invalidates prior approvals, so clear acceptances and pull an
       // already-accepted plan back to `proposed` for everyone to re-approve.
       const acceptanceReset =
@@ -321,6 +356,59 @@ export default function ProposalPage() {
     )
   }
 
+  // --- Decision Deadline (creator-only) ------------------------------------
+  async function runDeadlineAction(work, activityMsg, failMsg) {
+    if (deadlineBusy) return
+    setDeadlineBusy(true)
+    setDeadlineError('')
+    try {
+      await work()
+      if (activityMsg) await logActivity(id, 'status_changed', activityMsg)
+    } catch {
+      setDeadlineError(failMsg)
+    } finally {
+      setDeadlineBusy(false)
+    }
+  }
+
+  function handleSaveDeadline() {
+    const date = deadlineInput ? new Date(deadlineInput) : null
+    if (deadlineInput && Number.isNaN(date?.getTime())) {
+      setDeadlineError('Enter a valid date and time.')
+      return
+    }
+    runDeadlineAction(
+      () => setDecisionDeadline(id, date),
+      date ? `${actorName} set a decision deadline` : `${actorName} cleared the decision deadline`,
+      'Failed to update the deadline. Please try again.'
+    )
+  }
+
+  function handleClearDeadline() {
+    setDeadlineInput('')
+    runDeadlineAction(
+      () => setDecisionDeadline(id, null),
+      `${actorName} cleared the decision deadline`,
+      'Failed to update the deadline. Please try again.'
+    )
+  }
+
+  function handleLockNow() {
+    runDeadlineAction(
+      () => lockProposal(id),
+      `${actorName} locked collaboration on this proposal`,
+      'Failed to lock. Please try again.'
+    )
+  }
+
+  function handleReopenCollaboration() {
+    runDeadlineAction(
+      () => reopenProposal(id),
+      `${actorName} reopened collaboration`,
+      'Failed to reopen. Please try again.'
+    )
+  }
+
   async function handleDismiss() {
     if (busyAction) return
     setStatusError('')
@@ -364,12 +452,22 @@ export default function ProposalPage() {
   // current by the realtime listener), so the VotingField only passes ids/values.
   async function handleVote(field, optionId) {
     const options = proposal.voting?.[field]?.options ?? []
-    await castVote(id, field, optionId, user.uid, options, memberIds)
+    await castVote(id, field, optionId, user.uid, options)
   }
 
   async function handleAddOption(field, value) {
     const options = proposal.voting?.[field]?.options ?? []
-    await addFieldOption(id, field, value, options)
+    await addFieldOption(id, field, value, options, user.uid)
+  }
+
+  async function handleEditOption(field, optionId, value) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await updateFieldOption(id, field, optionId, value, options)
+  }
+
+  async function handleDeleteOption(field, optionId) {
+    const options = proposal.voting?.[field]?.options ?? []
+    await removeFieldOption(id, field, optionId, options)
   }
 
   async function handleLockField(field) {
@@ -511,6 +609,12 @@ export default function ProposalPage() {
   // completion additionally locks the responsibility checkboxes (totally locked,
   // archive-removal only).
   const detailsLocked = completed || isConfirmed
+  // Decision Deadline lock: collaboration (editing, voting, comments) closes once
+  // the creator locks the proposal or its deadline passes. Orthogonal to the
+  // status machine — it freezes content without changing status.
+  const collaborationLocked = isProposalLocked(proposal)
+  // Anything that lets a member change the plan's content is gated on this.
+  const editLocked = detailsLocked || collaborationLocked
   const displayStatus = completed ? 'completed' : proposal.status
 
   // Per-member acceptance.
@@ -558,9 +662,13 @@ export default function ProposalPage() {
             </div>
             <div className={styles.editActions}>
               {saveSuccess && <span className={styles.saveSuccess}>Saved</span>}
-              {detailsLocked ? (
+              {editLocked ? (
                 <span className={styles.lockedNote}>
-                  {completed ? 'Locked · completed' : 'Locked · confirmed'}
+                  {completed
+                    ? 'Locked · completed'
+                    : isConfirmed
+                      ? 'Locked · confirmed'
+                      : 'Locked · collaboration closed'}
                 </span>
               ) : editing ? (
                 <>
@@ -583,6 +691,29 @@ export default function ProposalPage() {
               )}
             </div>
           </div>
+
+          {/* Decision Deadline + collaboration status (visible to everyone). */}
+          <div className={styles.collabBar}>
+            <span className={styles.collabItem}>
+              <span className={styles.collabLabel}>Decision Deadline:</span>{' '}
+              <span className={styles.collabValue}>
+                {proposal.decisionDeadline ? formatTime(proposal.decisionDeadline) : 'None set'}
+              </span>
+            </span>
+            <span
+              className={`${styles.collabStatus} ${collaborationLocked ? styles.collabStatusLocked : styles.collabStatusOpen}`}
+            >
+              {collaborationLocked ? 'Collaboration Locked' : 'Open for Collaboration'}
+            </span>
+          </div>
+          {collaborationLocked && (
+            <p className={styles.collabBanner}>
+              Collaboration on this proposal has closed.{' '}
+              {isCreator
+                ? 'Reopen it from Manage below to make changes.'
+                : 'Only the creator may reopen it.'}
+            </p>
+          )}
 
           {saveError && <p className={styles.errorMsg}>{saveError}</p>}
 
@@ -635,9 +766,11 @@ export default function ProposalPage() {
                       resolvedValue={proposal[f.key]}
                       userId={user.uid}
                       isCreator={isCreator}
-                      frozen={detailsLocked}
+                      frozen={editLocked}
                       onVote={handleVote}
                       onAddOption={handleAddOption}
+                      onEditOption={handleEditOption}
+                      onDeleteOption={handleDeleteOption}
                       onLock={handleLockField}
                       onPick={handlePickWinner}
                     />
@@ -649,8 +782,9 @@ export default function ProposalPage() {
         </section>
 
         {/* Workflow / status. Hidden once completed — a completed plan is fully
-            locked and only offers per-user archive removal (in Manage below). */}
-        {!completed && (
+            locked and only offers per-user archive removal (in Manage below) —
+            and while collaboration is locked (the creator reopens to resume). */}
+        {!completed && !collaborationLocked && (
           <section className={styles.section}>
             <h2 className={styles.sectionTitle}>Update Status</h2>
 
@@ -1003,6 +1137,10 @@ export default function ProposalPage() {
           )}
           {completed ? (
             <p className={styles.emptyState}>This plan is complete — commenting is closed.</p>
+          ) : collaborationLocked ? (
+            <p className={styles.emptyState}>
+              Collaboration is closed — commenting is locked.
+            </p>
           ) : (
             <>
               <form onSubmit={submitComment} className={styles.commentForm}>
@@ -1050,7 +1188,71 @@ export default function ProposalPage() {
             </>
           ) : (
             <>
-              {isCreator && hasActiveVoting && (
+              {isCreator && (
+                <div className={styles.deadlineControls}>
+                  <h3 className={styles.manageSubtitle}>Decision Deadline</h3>
+                  <p className={styles.manageHint}>
+                    Set when collaboration closes. After it passes — or if you lock it now —
+                    the proposal becomes read-only until you reopen it.
+                  </p>
+                  <div className={styles.manageRow}>
+                    <input
+                      type="datetime-local"
+                      className={styles.input}
+                      value={deadlineInput}
+                      onChange={(e) => setDeadlineInput(e.target.value)}
+                      disabled={deadlineBusy}
+                    />
+                    <button
+                      className={styles.manageBtn}
+                      onClick={handleSaveDeadline}
+                      disabled={deadlineBusy}
+                      type="button"
+                    >
+                      {deadlineBusy ? 'Saving…' : 'Save deadline'}
+                    </button>
+                    {proposal.decisionDeadline && (
+                      <button
+                        className={styles.manageBtn}
+                        onClick={handleClearDeadline}
+                        disabled={deadlineBusy}
+                        type="button"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className={styles.manageRow}>
+                    {collaborationLocked ? (
+                      <button
+                        className={styles.manageBtn}
+                        onClick={handleReopenCollaboration}
+                        disabled={deadlineBusy}
+                        type="button"
+                      >
+                        {deadlineBusy ? 'Reopening…' : 'Reopen collaboration'}
+                      </button>
+                    ) : (
+                      <button
+                        className={styles.manageBtn}
+                        onClick={handleLockNow}
+                        disabled={deadlineBusy}
+                        type="button"
+                      >
+                        {deadlineBusy ? 'Locking…' : 'Lock collaboration now'}
+                      </button>
+                    )}
+                    <span className={styles.manageHint}>
+                      {collaborationLocked
+                        ? 'Reopening clears the deadline and resumes collaboration.'
+                        : 'Locking closes editing, voting, and comments for everyone.'}
+                    </span>
+                  </div>
+                  {deadlineError && <p className={styles.errorMsg}>{deadlineError}</p>}
+                </div>
+              )}
+
+              {isCreator && hasActiveVoting && !collaborationLocked && (
                 <div className={styles.manageRow}>
                   <button
                     className={styles.manageBtn}
@@ -1184,10 +1386,14 @@ function VotingField({
   frozen = false,
   onVote,
   onAddOption,
+  onEditOption,
+  onDeleteOption,
   onLock,
   onPick
 }) {
   const [newOption, setNewOption] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editValue, setEditValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -1236,6 +1442,46 @@ function VotingField({
           {options.map((o) => {
             const voted = (o.votes ?? []).includes(userId)
             const count = (o.votes ?? []).length
+            // The option's author may edit/delete their own suggestion while
+            // voting is open (interactive). Legacy options have no createdBy.
+            const mine = interactive && o.createdBy === userId
+            const isEditing = editingId === o.id
+
+            if (isEditing) {
+              return (
+                <li key={o.id} className={styles.optionRow}>
+                  <input
+                    className={styles.optionInput}
+                    type={inputType}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    className={styles.addBtn}
+                    disabled={busy || !editValue.trim()}
+                    onClick={() =>
+                      run(async () => {
+                        await onEditOption(field, o.id, editValue.trim())
+                        setEditingId(null)
+                      })
+                    }
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.pickBtn}
+                    onClick={() => setEditingId(null)}
+                    disabled={busy}
+                  >
+                    Cancel
+                  </button>
+                </li>
+              )
+            }
+
             return (
               <li key={o.id} className={styles.optionRow}>
                 {interactive && (
@@ -1252,6 +1498,30 @@ function VotingField({
                 <span className={styles.optionCount}>
                   {count} {count === 1 ? 'vote' : 'votes'}
                 </span>
+                {mine && (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.pickBtn}
+                      onClick={() => {
+                        setEditingId(o.id)
+                        setEditValue(o.value)
+                        setError('')
+                      }}
+                      disabled={busy}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.optionDeleteBtn}
+                      onClick={() => run(() => onDeleteOption(field, o.id))}
+                      disabled={busy}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
                 {isCreator && interactive && (
                   <button
                     type="button"

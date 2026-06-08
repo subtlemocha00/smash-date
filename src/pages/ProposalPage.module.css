@@ -832,6 +832,74 @@
   margin: 0;
 }
 
+/* Decision Deadline + collaboration status (detail header). */
+.collabBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0 4px;
+}
+
+.collabLabel {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.collabValue {
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  color: var(--fg);
+}
+
+.collabStatus {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.collabStatusOpen {
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  border-color: var(--border);
+}
+
+.collabStatusLocked {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.collabBanner {
+  margin: 8px 0 0;
+  padding: 0.6rem 0.75rem;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+}
+
+/* Creator-only Decision Deadline controls in the Manage section. */
+.deadlineControls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.manageSubtitle {
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--fg);
+  margin: 0;
+}
+
 .deleteRow {
   display: flex;
   align-items: center;
@@ -1011,6 +1079,30 @@
 }
 
 .pickBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Author-only "Delete" for one's own voting option — same link style as
+   .pickBtn, tinted danger to set it apart from the neutral controls. */
+.optionDeleteBtn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+}
+
+.optionDeleteBtn:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.optionDeleteBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

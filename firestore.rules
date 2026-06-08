@@ -29,6 +29,17 @@ service cloud.firestore {
       return isAuth() && ('createdBy' in p) && p.createdBy == request.auth.uid;
     }
 
+    // A proposal's collaboration is locked once the creator locks it manually
+    // (locked == true) or its decision deadline has passed. Mirrors the client's
+    // isProposalLocked; evaluated server-side here so locked proposals are truly
+    // read-only. `p` is a proposal's .data map. request.time is the server clock.
+    function proposalLockedData(p) {
+      return (('locked' in p) && p.locked == true)
+        || (('decisionDeadline' in p)
+            && p.decisionDeadline != null
+            && request.time >= p.decisionDeadline);
+    }
+
     // A non-member joining via invite may only add themselves to memberIds,
     // leaving every other field untouched.
     function isSelfJoin(groupId) {
@@ -136,6 +147,13 @@ service cloud.firestore {
           && dismissedChangeIsSelf();
       }
 
+      // The Decision Deadline controls (locked / lockedAt / decisionDeadline) are
+      // creator-only. This passes when the write leaves all three untouched.
+      function lockControlsUnchanged() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['locked', 'lockedAt', 'decisionDeadline']);
+      }
+
       allow read: if isGroupMember(resource.data.groupId);
       // Only group members may create proposals.
       allow create: if isAuth() && isGroupMember(request.resource.data.groupId);
@@ -150,8 +168,16 @@ service cloud.firestore {
       //    behalf of others); a full reset to [] is allowed (edits/transitions).
       //  * dismissedByUserIds may only be changed for one's own uid.
       //  * Per-user manual archive writes only archivedByUserIds, allowed here.
+      //  * Decision Deadline controls (locked / lockedAt / decisionDeadline) are
+      //    creator-only, and a locked proposal is read-only to everyone but the
+      //    creator (personal archive/dismiss still allowed).
       allow update: if isGroupMember(resource.data.groupId)
         && request.resource.data.groupId == resource.data.groupId
+        // Decision Deadline controls may only be changed by the creator.
+        && (isProposalDocCreator() || lockControlsUnchanged())
+        // A locked proposal (manual lock or passed deadline) is read-only to
+        // everyone but the creator, aside from a personal archive/dismiss write.
+        && (!proposalLockedData(resource.data) || isProposalDocCreator() || isOwnArchiveDismissOnly())
         // A confirmed proposal is locked to everyone but the creator — except for
         // a purely personal archive/dismiss write, which any member may make on
         // their own behalf (e.g. removing a completed proposal from their archive).
@@ -175,9 +201,15 @@ service cloud.firestore {
       allow read: if isGroupMember(
         get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
       );
-      allow create: if isAuth() && isGroupMember(
-        get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
-      );
+      // Commenting is collaboration: blocked once the proposal is locked (manual
+      // lock or passed decision deadline). The creator reopens to resume.
+      allow create: if isAuth()
+        && isGroupMember(
+          get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data.groupId
+        )
+        && !proposalLockedData(
+          get(/databases/$(database)/documents/proposals/$(request.resource.data.proposalId)).data
+        );
       // Members may update comment content, but proposalId and userId are immutable.
       // FIX (MEDIUM): was merged with read/delete — no field constraints on update.
       allow update: if isGroupMember(
