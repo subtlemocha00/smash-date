@@ -29,7 +29,6 @@ import {
   updateFieldOption,
   removeFieldOption,
   lockFieldToLeader,
-  resolveFieldTo,
   lockProposalVoting
 } from '../services/firebase/proposals'
 import { addComment, subscribeToComments } from '../services/firebase/comments'
@@ -475,11 +474,6 @@ export default function ProposalPage() {
     await lockFieldToLeader(id, field, options)
   }
 
-  async function handlePickWinner(field, optionId) {
-    const options = proposal.voting?.[field]?.options ?? []
-    await resolveFieldTo(id, field, optionId, options)
-  }
-
   async function handleLockProposal() {
     if (lockingProposal) return
     setLockingProposal(true)
@@ -772,7 +766,6 @@ export default function ProposalPage() {
                       onEditOption={handleEditOption}
                       onDeleteOption={handleDeleteOption}
                       onLock={handleLockField}
-                      onPick={handlePickWinner}
                     />
                   ) : (
                     <FieldView key={f.key} label={f.label} value={proposal[f.key]} />
@@ -1388,8 +1381,7 @@ function VotingField({
   onAddOption,
   onEditOption,
   onDeleteOption,
-  onLock,
-  onPick
+  onLock
 }) {
   const [newOption, setNewOption] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -1484,54 +1476,48 @@ function VotingField({
 
             return (
               <li key={o.id} className={styles.optionRow}>
-                {interactive && (
-                  <button
-                    type="button"
-                    className={`${styles.voteBtn} ${voted ? styles.voteBtnActive : ''}`}
-                    onClick={() => run(() => onVote(field, o.id))}
-                    disabled={busy}
-                  >
-                    {voted ? '✓ Voted' : 'Vote'}
-                  </button>
-                )}
-                <span className={styles.optionValue}>{o.value}</span>
-                <span className={styles.optionCount}>
-                  {count} {count === 1 ? 'vote' : 'votes'}
-                </span>
-                {mine && (
-                  <>
+                <div className={styles.optionRowTop}>
+                  {interactive && (
                     <button
                       type="button"
-                      className={styles.pickBtn}
-                      onClick={() => {
-                        setEditingId(o.id)
-                        setEditValue(o.value)
-                        setError('')
-                      }}
+                      className={`${styles.voteBtn} ${voted ? styles.voteBtnActive : ''}`}
+                      onClick={() => run(() => onVote(field, o.id))}
                       disabled={busy}
                     >
-                      Edit
+                      {voted ? '✓ Voted' : 'Vote'}
                     </button>
-                    <button
-                      type="button"
-                      className={styles.optionDeleteBtn}
-                      onClick={() => run(() => onDeleteOption(field, o.id))}
-                      disabled={busy}
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
-                {isCreator && interactive && (
-                  <button
-                    type="button"
-                    className={styles.pickBtn}
-                    onClick={() => run(() => onPick(field, o.id))}
-                    disabled={busy}
-                  >
-                    Pick winner
-                  </button>
-                )}
+                  )}
+                  <span className={styles.optionValue}>{o.value}</span>
+                </div>
+                <div className={styles.optionRowBottom}>
+                  <span className={styles.optionCount}>
+                    {count} {count === 1 ? 'vote' : 'votes'}
+                  </span>
+                  {mine && (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.pickBtn}
+                        onClick={() => {
+                          setEditingId(o.id)
+                          setEditValue(o.value)
+                          setError('')
+                        }}
+                        disabled={busy}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.optionDeleteBtn}
+                        onClick={() => run(() => onDeleteOption(field, o.id))}
+                        disabled={busy}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
               </li>
             )
           })}
@@ -1575,9 +1561,7 @@ function VotingField({
                 Lock field (winner: {uniqueLeader.value})
               </button>
             ) : leaders.length > 1 ? (
-              <span className={styles.tieNote}>Tie — use “Pick winner” to break it.</span>
-            ) : options.length > 0 ? (
-              <span className={styles.tieNote}>No votes yet — “Pick winner” to set manually.</span>
+              <span className={styles.tieNote}>Tied — waiting for more votes.</span>
             ) : null}
           </div>
         )}

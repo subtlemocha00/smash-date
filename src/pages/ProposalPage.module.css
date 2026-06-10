@@ -1008,9 +1008,20 @@
 
 .optionRow {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optionRowTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.optionRowBottom {
+  display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
 .optionValue {
