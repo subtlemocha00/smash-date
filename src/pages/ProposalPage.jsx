@@ -1689,7 +1689,10 @@ function VotingField({
             }
 
             return (
-              <li key={o.id} className={styles.optionRow}>
+              <li
+                key={o.id}
+                className={`${styles.optionRow} ${voted ? styles.optionRowVoted : ''}`}
+              >
                 <div className={styles.optionRowTop}>
                   {interactive && (
                     <button
