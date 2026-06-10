@@ -71,7 +71,7 @@ src/
                               #   setMemberName, renameGroup, removeMember, deleteGroup
       proposals.js            # createProposal, updateProposal, subscribeToGroupProposals, subscribeToProposal
       comments.js             # addComment, subscribeToComments
-      responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibilityDetails, deleteResponsibility, subscribeToResponsibilities
+      responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
   styles/
     global.css      # Design tokens, light/dark themes, reset, .loading-screen utility

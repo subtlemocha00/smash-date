@@ -38,10 +38,11 @@ export async function toggleResponsibility(id, completed) {
   await updateDoc(doc(db, 'responsibilities', id), { completed })
 }
 
-// Informational details only (a free-text note and/or a short item list). Not a
-// task system — no per-item completion, due dates, or reminders.
-export async function updateResponsibilityDetails(id, detailsNote, detailsList) {
-  await updateDoc(doc(db, 'responsibilities', id), { detailsNote, detailsList })
+// Combined edit used by the responsibility editor — title, assignment, and the
+// optional details (note + item list) in a single write. `fields` is a plain
+// object of the responsibility fields to change; `proposalId` stays immutable.
+export async function updateResponsibility(id, fields) {
+  await updateDoc(doc(db, 'responsibilities', id), fields)
 }
 
 export async function reassignResponsibility(id, assignedTo, assigneeName) {

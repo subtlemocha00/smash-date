@@ -36,8 +36,7 @@ import {
   addResponsibility,
   toggleResponsibility,
   deleteResponsibility,
-  reassignResponsibility,
-  updateResponsibilityDetails,
+  updateResponsibility,
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
@@ -83,6 +82,28 @@ function toDatetimeLocal(ts) {
   const d = ts.toDate()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Pencil glyph for the responsibility Edit control. Inline SVG keeps it crisp
+// and themeable via currentColor; the app has no icon dependency.
+function PencilIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  )
 }
 
 // Compact editor for a responsibility's optional details list. Shared by the
@@ -179,17 +200,18 @@ export default function ProposalPage() {
   const [respNote, setRespNote] = useState('')
   const [respList, setRespList] = useState([])
 
-  const [reassigningRespId, setReassigningRespId] = useState(null)
-  const [reassignTo, setReassignTo] = useState('')
-  const [reassigning, setReassigning] = useState(false)
-
-  // Per-row details: which rows are expanded, and the in-progress edit draft.
+  // Which rows have their (read-only) details panel expanded.
   const [expandedResp, setExpandedResp] = useState(() => new Set())
-  const [editingDetailsId, setEditingDetailsId] = useState(null)
-  const [draftNote, setDraftNote] = useState('')
-  const [draftList, setDraftList] = useState([])
-  const [savingDetails, setSavingDetails] = useState(false)
-  const [detailsError, setDetailsError] = useState('')
+
+  // Unified responsibility editor: the row being edited plus its working draft
+  // (title, assignee, and the optional details note + list).
+  const [editingRespId, setEditingRespId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editAssignee, setEditAssignee] = useState('')
+  const [editNote, setEditNote] = useState('')
+  const [editList, setEditList] = useState([])
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const [activityCollapsed, setActivityCollapsed] = useState(true)
 
@@ -598,68 +620,71 @@ export default function ProposalPage() {
     }
   }
 
-  async function handleReassign(r) {
-    const newUid = reassignTo || null
-    const newName = newUid ? (members[newUid] || '') : ''
-
-    if (newUid === (r.assignedTo || null)) {
-      setReassigningRespId(null)
-      return
-    }
-
-    setReassigning(true)
-    try {
-      await reassignResponsibility(r.id, newUid, newName)
-      const actMsg = newUid
-        ? `${userProfile.displayName || 'Someone'} reassigned "${r.title}" to ${newName}`
-        : `${userProfile.displayName || 'Someone'} unassigned "${r.title}"`
-      await logActivity(id, 'responsibility_assigned', actMsg)
-      setReassigningRespId(null)
-    } catch {
-      setReassigningRespId(null)
-    } finally {
-      setReassigning(false)
-    }
-  }
-
   function toggleExpanded(respId) {
     setExpandedResp((prev) => {
       const next = new Set(prev)
-      if (next.has(respId)) {
-        next.delete(respId)
-        if (editingDetailsId === respId) setEditingDetailsId(null)
-      } else {
-        next.add(respId)
-      }
+      if (next.has(respId)) next.delete(respId)
+      else next.add(respId)
       return next
     })
   }
 
-  function startEditDetails(r) {
-    setEditingDetailsId(r.id)
-    setDraftNote(r.detailsNote || '')
-    setDraftList([...(r.detailsList || [])])
-    setDetailsError('')
+  function startEdit(r) {
+    setEditingRespId(r.id)
+    setEditTitle(r.title || '')
+    setEditAssignee(r.assignedTo || '')
+    setEditNote(r.detailsNote || '')
+    setEditList([...(r.detailsList || [])])
+    setEditError('')
   }
 
-  function cancelEditDetails() {
-    setEditingDetailsId(null)
-    setDetailsError('')
+  function cancelEdit() {
+    setEditingRespId(null)
+    setEditError('')
   }
 
-  async function saveDetails(r) {
-    if (savingDetails) return
-    setSavingDetails(true)
-    setDetailsError('')
+  async function saveRespEdit(r) {
+    if (savingEdit) return
+    const title = editTitle.trim()
+    if (!title) {
+      setEditError('Title is required.')
+      return
+    }
+    setSavingEdit(true)
+    setEditError('')
     try {
-      const note = draftNote.trim()
-      const list = draftList.map((s) => s.trim()).filter(Boolean)
-      await updateResponsibilityDetails(r.id, note, list)
-      setEditingDetailsId(null)
+      const newUid = editAssignee || null
+      const newName = newUid ? members[newUid] || newUid : ''
+      const note = editNote.trim()
+      const list = editList.map((s) => s.trim()).filter(Boolean)
+      await updateResponsibility(r.id, {
+        title,
+        assignedTo: newUid,
+        assigneeName: newName,
+        detailsNote: note,
+        detailsList: list
+      })
+      // Preserve the assignment activity log when the assignee changes.
+      if (newUid !== (r.assignedTo || null)) {
+        const actMsg = newUid
+          ? `${userProfile.displayName || 'Someone'} reassigned "${title}" to ${newName}`
+          : `${userProfile.displayName || 'Someone'} unassigned "${title}"`
+        await logActivity(id, 'responsibility_assigned', actMsg)
+      }
+      // Collapse a now-empty details panel so there's nothing dangling to read.
+      if (!note && list.length === 0) {
+        setExpandedResp((prev) => {
+          if (!prev.has(r.id)) return prev
+          const next = new Set(prev)
+          next.delete(r.id)
+          return next
+        })
+      }
+      setEditingRespId(null)
     } catch {
-      setDetailsError('Failed to save details. Please try again.')
+      setEditError('Failed to save changes. Please try again.')
     } finally {
-      setSavingDetails(false)
+      setSavingEdit(false)
     }
   }
 
@@ -1071,11 +1096,12 @@ export default function ProposalPage() {
                 const note = (r.detailsNote || '').trim()
                 const list = (r.detailsList || []).filter((s) => s && s.trim())
                 const hasDetails = note || list.length > 0
-                // Always offer the toggle while editable (so members can add
-                // details); when locked, only offer it if there's something to read.
-                const showDetailsToggle = hasDetails || !editLocked
+                const editingThis = editingRespId === r.id
                 const expanded = expandedResp.has(r.id)
-                const editingDetails = editingDetailsId === r.id
+                // Details is a read-only view control: offer it whenever there's
+                // something to read (or to collapse). Adding/changing details is
+                // done through the Edit editor, not here.
+                const showDetailsToggle = (hasDetails || expanded) && !editingThis
                 return (
                   <li key={r.id} className={styles.respItem}>
                     <div className={styles.respItemMain}>
@@ -1101,53 +1127,19 @@ export default function ProposalPage() {
                           {expanded ? 'Hide' : 'Details'}
                         </button>
                       )}
-                      {detailsLocked ? (
-                        <span className={styles.respAssignee}>
-                          {r.assigneeName || 'Unassigned'}
-                        </span>
-                      ) : reassigningRespId === r.id ? (
-                        <div className={styles.reassignRow}>
-                          <select
-                            className={styles.reassignSelect}
-                            value={reassignTo}
-                            onChange={(e) => setReassignTo(e.target.value)}
-                            autoFocus
-                          >
-                            <option value="">Unassigned</option>
-                            {Object.entries(members).map(([uid, name]) => (
-                              <option key={uid} value={uid}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className={styles.reassignSaveBtn}
-                            type="button"
-                            onClick={() => handleReassign(r)}
-                            disabled={reassigning}
-                          >
-                            {reassigning ? '…' : 'Save'}
-                          </button>
-                          <button
-                            className={styles.reassignCancelBtn}
-                            type="button"
-                            onClick={() => setReassigningRespId(null)}
-                            disabled={reassigning}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
+                      {/* Assignment is display-only; editing happens via Edit. */}
+                      <span className={styles.respAssignee}>
+                        {r.assigneeName || 'Unassigned'}
+                      </span>
+                      {!editLocked && !editingThis && (
                         <button
-                          className={styles.respAssigneeBtn}
                           type="button"
-                          title="Click to reassign"
-                          onClick={() => {
-                            setReassigningRespId(r.id)
-                            setReassignTo(r.assignedTo || '')
-                          }}
+                          className={styles.respEditBtn}
+                          onClick={() => startEdit(r)}
+                          aria-label={`Edit "${r.title}"`}
+                          title="Edit responsibility"
                         >
-                          {r.assigneeName || 'Unassigned'}
+                          <PencilIcon />
                         </button>
                       )}
                       {!detailsLocked && (
@@ -1161,74 +1153,82 @@ export default function ProposalPage() {
                         </button>
                       )}
                     </div>
-                    {expanded && (
+                    {editingThis ? (
+                      <div className={styles.respEditForm}>
+                        <label className={styles.detailsFieldLabel}>Title</label>
+                        <input
+                          className={styles.respEditInput}
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          placeholder="e.g. Book restaurant"
+                          autoFocus
+                        />
+                        <label className={styles.detailsFieldLabel}>Assigned to</label>
+                        <select
+                          className={styles.respEditSelect}
+                          value={editAssignee}
+                          onChange={(e) => setEditAssignee(e.target.value)}
+                        >
+                          <option value="">Unassigned</option>
+                          {Object.entries(members).map(([uid, name]) => (
+                            <option key={uid} value={uid}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                        <label className={styles.detailsFieldLabel}>Note</label>
+                        <textarea
+                          className={styles.detailsNoteInput}
+                          value={editNote}
+                          onChange={(e) => setEditNote(e.target.value)}
+                          placeholder="e.g. WHAM-O brand, specifically."
+                          rows={2}
+                        />
+                        <label className={styles.detailsFieldLabel}>Items</label>
+                        <DetailsListEditor items={editList} onChange={setEditList} />
+                        {editError && <p className={styles.errorMsg}>{editError}</p>}
+                        <div className={styles.detailsEditActions}>
+                          <button
+                            type="button"
+                            className={styles.reassignSaveBtn}
+                            onClick={() => saveRespEdit(r)}
+                            disabled={savingEdit || !editTitle.trim()}
+                          >
+                            {savingEdit ? '…' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.reassignCancelBtn}
+                            onClick={cancelEdit}
+                            disabled={savingEdit}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : expanded ? (
                       <div className={styles.respDetails}>
-                        {editingDetails ? (
-                          <div className={styles.detailsEditForm}>
-                            <label className={styles.detailsFieldLabel}>Note</label>
-                            <textarea
-                              className={styles.detailsNoteInput}
-                              value={draftNote}
-                              onChange={(e) => setDraftNote(e.target.value)}
-                              placeholder="e.g. WHAM-O brand, specifically."
-                              rows={2}
-                            />
-                            <label className={styles.detailsFieldLabel}>Items</label>
-                            <DetailsListEditor items={draftList} onChange={setDraftList} />
-                            {detailsError && <p className={styles.errorMsg}>{detailsError}</p>}
-                            <div className={styles.detailsEditActions}>
-                              <button
-                                type="button"
-                                className={styles.reassignSaveBtn}
-                                onClick={() => saveDetails(r)}
-                                disabled={savingDetails}
-                              >
-                                {savingDetails ? '…' : 'Save'}
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.reassignCancelBtn}
-                                onClick={cancelEditDetails}
-                                disabled={savingDetails}
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                        {note && (
+                          <div className={styles.detailsSection}>
+                            <span className={styles.detailsLabel}>Note</span>
+                            <p className={styles.detailsNote}>{note}</p>
                           </div>
-                        ) : (
-                          <>
-                            {note && (
-                              <div className={styles.detailsSection}>
-                                <span className={styles.detailsLabel}>Note</span>
-                                <p className={styles.detailsNote}>{note}</p>
-                              </div>
-                            )}
-                            {list.length > 0 && (
-                              <div className={styles.detailsSection}>
-                                <span className={styles.detailsLabel}>Items</span>
-                                <ul className={styles.detailsItems}>
-                                  {list.map((item, i) => (
-                                    <li key={i}>{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            {!hasDetails && (
-                              <p className={styles.detailsEmpty}>No details yet.</p>
-                            )}
-                            {!editLocked && (
-                              <button
-                                type="button"
-                                className={styles.detailsEditBtn}
-                                onClick={() => startEditDetails(r)}
-                              >
-                                {hasDetails ? 'Edit details' : 'Add details'}
-                              </button>
-                            )}
-                          </>
+                        )}
+                        {list.length > 0 && (
+                          <div className={styles.detailsSection}>
+                            <span className={styles.detailsLabel}>Items</span>
+                            <ul className={styles.detailsItems}>
+                              {list.map((item, i) => (
+                                <li key={i}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {!hasDetails && (
+                          <p className={styles.detailsEmpty}>No details yet.</p>
                         )}
                       </div>
-                    )}
+                    ) : null}
                   </li>
                 )
               })}

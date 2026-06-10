@@ -501,6 +501,9 @@
   align-items: center;
   gap: 10px;
   padding: 10px 0;
+  /* On very narrow screens the controls wrap to a second line instead of
+     forcing the row to scroll horizontally. */
+  flex-wrap: wrap;
 }
 
 .respLabel {
@@ -535,47 +538,35 @@
   font-size: 12px;
   color: var(--fg-muted);
   flex-shrink: 0;
+  overflow-wrap: anywhere;
 }
 
-.respAssigneeBtn {
-  font-size: 12px;
-  color: var(--fg-muted);
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-family: var(--font-body);
-}
-
-.respAssigneeBtn:hover {
-  color: var(--fg);
-  text-decoration: underline dotted;
-}
-
-.reassignRow {
-  display: flex;
+/* Dedicated edit control. Square icon button matching the row's other small
+   controls; keyboard-focusable with a visible ring and a comfortable tap size. */
+.respEditBtn {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-
-.reassignSelect {
-  font-family: var(--font-body);
-  font-size: 12px;
-  padding: 2px 6px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: none;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
-  outline: none;
+  color: var(--fg-muted);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.reassignSelect:focus {
+.respEditBtn:hover {
+  color: var(--fg);
+  border-color: var(--fg-muted);
+}
+
+.respEditBtn:focus-visible {
   border-color: var(--fg);
   box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
 }
 
 .reassignSaveBtn {
@@ -692,32 +683,42 @@
   color: var(--fg-muted);
 }
 
-.detailsEditBtn {
-  align-self: flex-start;
+/* Unified responsibility editor (title + assignee + details), opened from the
+   row's Edit button. Indented to align under the title, past the checkbox. */
+.respEditForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 12px 28px;
+}
+
+.respEditInput,
+.respEditSelect {
   font-family: var(--font-body);
-  font-size: 12px;
-  padding: 2px 8px;
-  background: none;
+  font-size: 14px;
+  padding: 0.5rem 0.7rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  color: var(--fg-muted);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+}
+
+.respEditSelect {
   cursor: pointer;
 }
 
-.detailsEditBtn:hover {
-  color: var(--fg);
-  border-color: var(--fg-muted);
+.respEditInput:focus,
+.respEditSelect:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-/* Details edit form — used inline on a row and in the create form. */
-.detailsEditForm,
+/* Details editor used in the create form. */
 .respDetailsCreate {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.respDetailsCreate {
   margin-top: 4px;
 }
 
