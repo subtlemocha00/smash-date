@@ -71,7 +71,7 @@ src/
                               #   setMemberName, renameGroup, removeMember, deleteGroup
       proposals.js            # createProposal, updateProposal, subscribeToGroupProposals, subscribeToProposal
       comments.js             # addComment, subscribeToComments
-      responsibilities.js     # addResponsibility, toggleResponsibility, deleteResponsibility, subscribeToResponsibilities
+      responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibilityDetails, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
   styles/
     global.css      # Design tokens, light/dark themes, reset, .loading-screen utility
@@ -202,9 +202,20 @@ Fields not listed for older proposals (`decisionDeadline`, `locked`, `lockedAt`,
   assignedTo: string | null,   // userId, or null if unassigned
   assigneeName: string,        // denormalized at write time
   completed: boolean,
+  detailsNote: string,         // optional free-text note (informational; '' when unused)
+  detailsList: string[],       // optional list of short items (informational; [] when unused)
   createdAt: Timestamp
 }
 ```
+
+`detailsNote` and `detailsList` are optional supporting context shown in an
+inline, collapsible "Details" panel on each responsibility. Either, both, or
+neither may be set. They are purely informational — not subtasks — so there is
+no per-item completion, due dates, or reminders. Responsibilities written before
+these fields existed render normally (the UI treats missing values as `''` /
+`[]`); no migration is required. Like the rest of a proposal, details are
+editable by any group member until the proposal is locked/confirmed, after which
+they become read-only.
 
 ### `activityEvents/{eventId}`
 

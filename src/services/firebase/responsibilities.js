@@ -11,19 +11,37 @@ import {
 } from 'firebase/firestore'
 import { db } from './firestore'
 
-export async function addResponsibility(proposalId, title, assignedTo, assigneeName) {
+export async function addResponsibility(
+  proposalId,
+  title,
+  assignedTo,
+  assigneeName,
+  detailsNote = '',
+  detailsList = []
+) {
   await addDoc(collection(db, 'responsibilities'), {
     proposalId,
     title,
     assignedTo,
     assigneeName,
     completed: false,
+    // Optional supporting context. Stored even when empty so the shape is
+    // consistent; existing docs without these fields still read fine since the
+    // UI falls back to '' / [] when absent.
+    detailsNote,
+    detailsList,
     createdAt: serverTimestamp()
   })
 }
 
 export async function toggleResponsibility(id, completed) {
   await updateDoc(doc(db, 'responsibilities', id), { completed })
+}
+
+// Informational details only (a free-text note and/or a short item list). Not a
+// task system — no per-item completion, due dates, or reminders.
+export async function updateResponsibilityDetails(id, detailsNote, detailsList) {
+  await updateDoc(doc(db, 'responsibilities', id), { detailsNote, detailsList })
 }
 
 export async function reassignResponsibility(id, assignedTo, assigneeName) {

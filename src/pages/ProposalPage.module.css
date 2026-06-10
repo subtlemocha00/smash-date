@@ -493,6 +493,11 @@
 
 .respItem {
   display: flex;
+  flex-direction: column;
+}
+
+.respItemMain {
+  display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 0;
@@ -616,12 +621,208 @@
   color: var(--coral-700);
 }
 
+/* Responsibility details (optional note + item list) */
+
+.detailsToggle {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 2px 8px;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.detailsToggle:hover {
+  color: var(--fg);
+  border-color: var(--fg-muted);
+}
+
+.detailsToggleInline {
+  align-self: flex-start;
+}
+
+/* Expanded view, indented to sit under the title past the checkbox. */
+.respDetails {
+  padding: 0 0 12px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detailsLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-subtle);
+  font-weight: var(--weight-medium);
+}
+
+.detailsNote {
+  font-size: 13px;
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detailsItems {
+  list-style: disc;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detailsItems li {
+  font-size: 13px;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.detailsEmpty {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.detailsEditBtn {
+  align-self: flex-start;
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 2px 8px;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.detailsEditBtn:hover {
+  color: var(--fg);
+  border-color: var(--fg-muted);
+}
+
+/* Details edit form — used inline on a row and in the create form. */
+.detailsEditForm,
+.respDetailsCreate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.respDetailsCreate {
+  margin-top: 4px;
+}
+
+.detailsFieldLabel {
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: var(--weight-medium);
+}
+
+.detailsNoteInput {
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+  resize: vertical;
+  min-height: 38px;
+}
+
+.detailsNoteInput:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.detailsListEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailsListEditRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detailsListInput {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+}
+
+.detailsListInput:focus {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.detailsItemRemove {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--fg-faint);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.detailsItemRemove:hover {
+  color: var(--coral-700);
+}
+
+.detailsAddItemBtn {
+  align-self: flex-start;
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 2px 8px;
+  background: none;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.detailsAddItemBtn:hover {
+  color: var(--fg);
+}
+
+.detailsEditActions {
+  display: flex;
+  gap: 6px;
+}
+
+.respAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* Add forms (shared by responsibilities and comments) */
 
 .addForm {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
   flex-wrap: wrap;
 }
 

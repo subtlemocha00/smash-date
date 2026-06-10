@@ -37,6 +37,7 @@ import {
   toggleResponsibility,
   deleteResponsibility,
   reassignResponsibility,
+  updateResponsibilityDetails,
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
@@ -82,6 +83,46 @@ function toDatetimeLocal(ts) {
   const d = ts.toDate()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Compact editor for a responsibility's optional details list. Shared by the
+// create form and the inline edit form. `items` is the working array of
+// strings; `onChange` receives the next array. Empty items are kept here for
+// editing and filtered out by the caller on save.
+function DetailsListEditor({ items, onChange }) {
+  return (
+    <div className={styles.detailsListEditor}>
+      {items.map((item, i) => (
+        <div key={i} className={styles.detailsListEditRow}>
+          <input
+            className={styles.detailsListInput}
+            value={item}
+            placeholder="e.g. sandals"
+            onChange={(e) => {
+              const next = items.slice()
+              next[i] = e.target.value
+              onChange(next)
+            }}
+          />
+          <button
+            type="button"
+            className={styles.detailsItemRemove}
+            onClick={() => onChange(items.filter((_, j) => j !== i))}
+            aria-label="Remove item"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className={styles.detailsAddItemBtn}
+        onClick={() => onChange([...items, ''])}
+      >
+        + Add item
+      </button>
+    </div>
+  )
 }
 
 export default function ProposalPage() {
@@ -133,9 +174,22 @@ export default function ProposalPage() {
   const [respSubmitting, setRespSubmitting] = useState(false)
   const [respError, setRespError] = useState('')
 
+  // Optional details on the create form (hidden until the user opts in).
+  const [respDetailsOpen, setRespDetailsOpen] = useState(false)
+  const [respNote, setRespNote] = useState('')
+  const [respList, setRespList] = useState([])
+
   const [reassigningRespId, setReassigningRespId] = useState(null)
   const [reassignTo, setReassignTo] = useState('')
   const [reassigning, setReassigning] = useState(false)
+
+  // Per-row details: which rows are expanded, and the in-progress edit draft.
+  const [expandedResp, setExpandedResp] = useState(() => new Set())
+  const [editingDetailsId, setEditingDetailsId] = useState(null)
+  const [draftNote, setDraftNote] = useState('')
+  const [draftList, setDraftList] = useState([])
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [detailsError, setDetailsError] = useState('')
 
   const [activityCollapsed, setActivityCollapsed] = useState(true)
 
@@ -522,7 +576,9 @@ export default function ProposalPage() {
     setRespError('')
     try {
       const assigneeName = respAssignee ? members[respAssignee] || respAssignee : ''
-      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName)
+      const note = respNote.trim()
+      const list = respList.map((s) => s.trim()).filter(Boolean)
+      await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName, note, list)
       await logActivity(
         id,
         'responsibility_assigned',
@@ -532,6 +588,9 @@ export default function ProposalPage() {
       )
       setRespTitle('')
       setRespAssignee('')
+      setRespNote('')
+      setRespList([])
+      setRespDetailsOpen(false)
     } catch {
       setRespError('Failed to add responsibility. Please try again.')
     } finally {
@@ -560,6 +619,47 @@ export default function ProposalPage() {
       setReassigningRespId(null)
     } finally {
       setReassigning(false)
+    }
+  }
+
+  function toggleExpanded(respId) {
+    setExpandedResp((prev) => {
+      const next = new Set(prev)
+      if (next.has(respId)) {
+        next.delete(respId)
+        if (editingDetailsId === respId) setEditingDetailsId(null)
+      } else {
+        next.add(respId)
+      }
+      return next
+    })
+  }
+
+  function startEditDetails(r) {
+    setEditingDetailsId(r.id)
+    setDraftNote(r.detailsNote || '')
+    setDraftList([...(r.detailsList || [])])
+    setDetailsError('')
+  }
+
+  function cancelEditDetails() {
+    setEditingDetailsId(null)
+    setDetailsError('')
+  }
+
+  async function saveDetails(r) {
+    if (savingDetails) return
+    setSavingDetails(true)
+    setDetailsError('')
+    try {
+      const note = draftNote.trim()
+      const list = draftList.map((s) => s.trim()).filter(Boolean)
+      await updateResponsibilityDetails(r.id, note, list)
+      setEditingDetailsId(null)
+    } catch {
+      setDetailsError('Failed to save details. Please try again.')
+    } finally {
+      setSavingDetails(false)
     }
   }
 
@@ -714,63 +814,63 @@ export default function ProposalPage() {
           <div className={styles.fields}>
             {editing
               ? FIELDS.map((f) => {
-                  const votingOn = f.votable && votingToggles[f.key]
-                  return (
-                    <div key={f.key} className={styles.editField}>
-                      {f.votable && isCreator && (
-                        <label className={styles.votingToggle}>
-                          <input
-                            type="checkbox"
-                            checked={!!votingToggles[f.key]}
-                            onChange={(e) =>
-                              setVotingToggles((t) => ({ ...t, [f.key]: e.target.checked }))
-                            }
-                          />
-                          Let members vote on {f.label.toLowerCase()}
-                        </label>
-                      )}
-                      {votingOn ? (
-                        <div className={styles.fieldRow}>
-                          <span className={styles.fieldLabel}>{f.label}</span>
-                          <span className={styles.votingHint}>
-                            Members vote to decide this field.
-                          </span>
-                        </div>
-                      ) : (
-                        <FieldInput
-                          label={f.label}
-                          name={f.key}
-                          type={f.type}
-                          multiline={f.multiline}
-                          value={editFields[f.key]}
-                          onChange={(v) => setEditFields((s) => ({ ...s, [f.key]: v }))}
+                const votingOn = f.votable && votingToggles[f.key]
+                return (
+                  <div key={f.key} className={styles.editField}>
+                    {f.votable && isCreator && (
+                      <label className={styles.votingToggle}>
+                        <input
+                          type="checkbox"
+                          checked={!!votingToggles[f.key]}
+                          onChange={(e) =>
+                            setVotingToggles((t) => ({ ...t, [f.key]: e.target.checked }))
+                          }
                         />
-                      )}
-                    </div>
-                  )
-                })
+                        Let members vote on {f.label.toLowerCase()}
+                      </label>
+                    )}
+                    {votingOn ? (
+                      <div className={styles.fieldRow}>
+                        <span className={styles.fieldLabel}>{f.label}</span>
+                        <span className={styles.votingHint}>
+                          Members vote to decide this field.
+                        </span>
+                      </div>
+                    ) : (
+                      <FieldInput
+                        label={f.label}
+                        name={f.key}
+                        type={f.type}
+                        multiline={f.multiline}
+                        value={editFields[f.key]}
+                        onChange={(v) => setEditFields((s) => ({ ...s, [f.key]: v }))}
+                      />
+                    )}
+                  </div>
+                )
+              })
               : FIELDS.map((f) =>
-                  f.votable && isFieldVotingEnabled(proposal, f.key) ? (
-                    <VotingField
-                      key={f.key}
-                      label={f.label}
-                      field={f.key}
-                      inputType={f.type}
-                      voting={proposal.voting[f.key]}
-                      resolvedValue={proposal[f.key]}
-                      userId={user.uid}
-                      isCreator={isCreator}
-                      frozen={editLocked}
-                      onVote={handleVote}
-                      onAddOption={handleAddOption}
-                      onEditOption={handleEditOption}
-                      onDeleteOption={handleDeleteOption}
-                      onLock={handleLockField}
-                    />
-                  ) : (
-                    <FieldView key={f.key} label={f.label} value={proposal[f.key]} />
-                  )
-                )}
+                f.votable && isFieldVotingEnabled(proposal, f.key) ? (
+                  <VotingField
+                    key={f.key}
+                    label={f.label}
+                    field={f.key}
+                    inputType={f.type}
+                    voting={proposal.voting[f.key]}
+                    resolvedValue={proposal[f.key]}
+                    userId={user.uid}
+                    isCreator={isCreator}
+                    frozen={editLocked}
+                    onVote={handleVote}
+                    onAddOption={handleAddOption}
+                    onEditOption={handleEditOption}
+                    onDeleteOption={handleDeleteOption}
+                    onLock={handleLockField}
+                  />
+                ) : (
+                  <FieldView key={f.key} label={f.label} value={proposal[f.key]} />
+                )
+              )}
           </div>
         </section>
 
@@ -967,111 +1067,225 @@ export default function ProposalPage() {
             <p className={styles.emptyState}>No responsibilities assigned.</p>
           ) : (
             <ul className={styles.respList}>
-              {responsibilities.map((r) => (
-                <li key={r.id} className={styles.respItem}>
-                  <label className={styles.respLabel}>
-                    <input
-                      type="checkbox"
-                      checked={r.completed}
-                      onChange={() => toggleResponsibility(r.id, !r.completed)}
-                      className={styles.respCheck}
-                      disabled={completed}
-                    />
-                    <span className={r.completed ? styles.respTitleDone : styles.respTitle}>
-                      {r.title}
-                    </span>
-                  </label>
-                  {detailsLocked ? (
-                    <span className={styles.respAssignee}>
-                      {r.assigneeName || 'Unassigned'}
-                    </span>
-                  ) : reassigningRespId === r.id ? (
-                    <div className={styles.reassignRow}>
-                      <select
-                        className={styles.reassignSelect}
-                        value={reassignTo}
-                        onChange={(e) => setReassignTo(e.target.value)}
-                        autoFocus
-                      >
-                        <option value="">Unassigned</option>
-                        {Object.entries(members).map(([uid, name]) => (
-                          <option key={uid} value={uid}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className={styles.reassignSaveBtn}
-                        type="button"
-                        onClick={() => handleReassign(r)}
-                        disabled={reassigning}
-                      >
-                        {reassigning ? '…' : 'Save'}
-                      </button>
-                      <button
-                        className={styles.reassignCancelBtn}
-                        type="button"
-                        onClick={() => setReassigningRespId(null)}
-                        disabled={reassigning}
-                      >
-                        Cancel
-                      </button>
+              {responsibilities.map((r) => {
+                const note = (r.detailsNote || '').trim()
+                const list = (r.detailsList || []).filter((s) => s && s.trim())
+                const hasDetails = note || list.length > 0
+                // Always offer the toggle while editable (so members can add
+                // details); when locked, only offer it if there's something to read.
+                const showDetailsToggle = hasDetails || !editLocked
+                const expanded = expandedResp.has(r.id)
+                const editingDetails = editingDetailsId === r.id
+                return (
+                  <li key={r.id} className={styles.respItem}>
+                    <div className={styles.respItemMain}>
+                      <label className={styles.respLabel}>
+                        <input
+                          type="checkbox"
+                          checked={r.completed}
+                          onChange={() => toggleResponsibility(r.id, !r.completed)}
+                          className={styles.respCheck}
+                          disabled={completed}
+                        />
+                        <span className={r.completed ? styles.respTitleDone : styles.respTitle}>
+                          {r.title}
+                        </span>
+                      </label>
+                      {showDetailsToggle && (
+                        <button
+                          type="button"
+                          className={styles.detailsToggle}
+                          onClick={() => toggleExpanded(r.id)}
+                          aria-expanded={expanded}
+                        >
+                          {expanded ? 'Hide' : 'Details'}
+                        </button>
+                      )}
+                      {detailsLocked ? (
+                        <span className={styles.respAssignee}>
+                          {r.assigneeName || 'Unassigned'}
+                        </span>
+                      ) : reassigningRespId === r.id ? (
+                        <div className={styles.reassignRow}>
+                          <select
+                            className={styles.reassignSelect}
+                            value={reassignTo}
+                            onChange={(e) => setReassignTo(e.target.value)}
+                            autoFocus
+                          >
+                            <option value="">Unassigned</option>
+                            {Object.entries(members).map(([uid, name]) => (
+                              <option key={uid} value={uid}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className={styles.reassignSaveBtn}
+                            type="button"
+                            onClick={() => handleReassign(r)}
+                            disabled={reassigning}
+                          >
+                            {reassigning ? '…' : 'Save'}
+                          </button>
+                          <button
+                            className={styles.reassignCancelBtn}
+                            type="button"
+                            onClick={() => setReassigningRespId(null)}
+                            disabled={reassigning}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className={styles.respAssigneeBtn}
+                          type="button"
+                          title="Click to reassign"
+                          onClick={() => {
+                            setReassigningRespId(r.id)
+                            setReassignTo(r.assignedTo || '')
+                          }}
+                        >
+                          {r.assigneeName || 'Unassigned'}
+                        </button>
+                      )}
+                      {!detailsLocked && (
+                        <button
+                          className={styles.removeBtn}
+                          onClick={() => deleteResponsibility(r.id)}
+                          type="button"
+                          aria-label="Remove"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <button
-                      className={styles.respAssigneeBtn}
-                      type="button"
-                      title="Click to reassign"
-                      onClick={() => {
-                        setReassigningRespId(r.id)
-                        setReassignTo(r.assignedTo || '')
-                      }}
-                    >
-                      {r.assigneeName || 'Unassigned'}
-                    </button>
-                  )}
-                  {!detailsLocked && (
-                    <button
-                      className={styles.removeBtn}
-                      onClick={() => deleteResponsibility(r.id)}
-                      type="button"
-                      aria-label="Remove"
-                    >
-                      ×
-                    </button>
-                  )}
-                </li>
-              ))}
+                    {expanded && (
+                      <div className={styles.respDetails}>
+                        {editingDetails ? (
+                          <div className={styles.detailsEditForm}>
+                            <label className={styles.detailsFieldLabel}>Note</label>
+                            <textarea
+                              className={styles.detailsNoteInput}
+                              value={draftNote}
+                              onChange={(e) => setDraftNote(e.target.value)}
+                              placeholder="e.g. WHAM-O brand, specifically."
+                              rows={2}
+                            />
+                            <label className={styles.detailsFieldLabel}>Items</label>
+                            <DetailsListEditor items={draftList} onChange={setDraftList} />
+                            {detailsError && <p className={styles.errorMsg}>{detailsError}</p>}
+                            <div className={styles.detailsEditActions}>
+                              <button
+                                type="button"
+                                className={styles.reassignSaveBtn}
+                                onClick={() => saveDetails(r)}
+                                disabled={savingDetails}
+                              >
+                                {savingDetails ? '…' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.reassignCancelBtn}
+                                onClick={cancelEditDetails}
+                                disabled={savingDetails}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {note && (
+                              <div className={styles.detailsSection}>
+                                <span className={styles.detailsLabel}>Note</span>
+                                <p className={styles.detailsNote}>{note}</p>
+                              </div>
+                            )}
+                            {list.length > 0 && (
+                              <div className={styles.detailsSection}>
+                                <span className={styles.detailsLabel}>Items</span>
+                                <ul className={styles.detailsItems}>
+                                  {list.map((item, i) => (
+                                    <li key={i}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {!hasDetails && (
+                              <p className={styles.detailsEmpty}>No details yet.</p>
+                            )}
+                            {!editLocked && (
+                              <button
+                                type="button"
+                                className={styles.detailsEditBtn}
+                                onClick={() => startEditDetails(r)}
+                              >
+                                {hasDetails ? 'Edit details' : 'Add details'}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
           {!detailsLocked && (
             <>
-              <form onSubmit={submitResponsibility} className={styles.addForm}>
-                <input
-                  className={styles.input}
-                  placeholder="e.g. Book restaurant"
-                  value={respTitle}
-                  onChange={(e) => setRespTitle(e.target.value)}
-                />
-                <select
-                  className={styles.select}
-                  value={respAssignee}
-                  onChange={(e) => setRespAssignee(e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {Object.entries(members).map(([uid, name]) => (
-                    <option key={uid} value={uid}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+              <form onSubmit={submitResponsibility} className={styles.respAddForm}>
+                <div className={styles.addForm}>
+                  <input
+                    className={styles.input}
+                    placeholder="e.g. Book restaurant"
+                    value={respTitle}
+                    onChange={(e) => setRespTitle(e.target.value)}
+                  />
+                  <select
+                    className={styles.select}
+                    value={respAssignee}
+                    onChange={(e) => setRespAssignee(e.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {Object.entries(members).map(([uid, name]) => (
+                      <option key={uid} value={uid}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className={styles.addBtn}
+                    type="submit"
+                    disabled={respSubmitting || !respTitle.trim()}
+                  >
+                    {respSubmitting ? 'Adding…' : 'Add'}
+                  </button>
+                </div>
                 <button
-                  className={styles.addBtn}
-                  type="submit"
-                  disabled={respSubmitting || !respTitle.trim()}
+                  type="button"
+                  className={`${styles.detailsToggle} ${styles.detailsToggleInline}`}
+                  onClick={() => setRespDetailsOpen((o) => !o)}
+                  aria-expanded={respDetailsOpen}
                 >
-                  {respSubmitting ? 'Adding…' : 'Add'}
+                  {respDetailsOpen ? 'Hide details' : '+ Add details'}
                 </button>
+                {respDetailsOpen && (
+                  <div className={styles.respDetailsCreate}>
+                    <label className={styles.detailsFieldLabel}>Note</label>
+                    <textarea
+                      className={styles.detailsNoteInput}
+                      value={respNote}
+                      onChange={(e) => setRespNote(e.target.value)}
+                      placeholder="e.g. Pick up some fun shooters for Ted"
+                      rows={2}
+                    />
+                    <label className={styles.detailsFieldLabel}>Items</label>
+                    <DetailsListEditor items={respList} onChange={setRespList} />
+                  </div>
+                )}
               </form>
               {respError && <p className={styles.errorMsg}>{respError}</p>}
             </>
