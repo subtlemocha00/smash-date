@@ -51,6 +51,42 @@ export async function createProposal(groupId, userId, title) {
   return ref.id
 }
 
+// Creates a brand-new proposal seeded from a copy. `content` is the reusable
+// material the caller has already stripped of the original's identity and
+// history (and with voting reset to zero votes). Ownership, status, acceptance,
+// archive/dismiss state, the decision deadline, and lock all start fresh exactly
+// as createProposal would — the copy is a normal new proposal owned by `userId`.
+// Returns the new id. Responsibilities are added separately by the caller, after
+// this doc exists (their create rule resolves the parent proposal by id).
+export async function createProposalFromCopy(groupId, userId, content) {
+  const ref = await addDoc(collection(db, 'proposals'), {
+    groupId,
+    createdBy: userId,
+    title: content.title || '',
+    description: content.description || '',
+    // Date is intentionally not carried over — a copy requires a fresh date.
+    date: content.date || '',
+    time: content.time || '',
+    activity: content.activity || '',
+    location: content.location || '',
+    childcareNotes: content.childcareNotes || '',
+    budget: content.budget || '',
+    notes: content.notes || '',
+    // Only attach voting when the source had any, so non-voting copies stay clean.
+    ...(content.voting && Object.keys(content.voting).length ? { voting: content.voting } : {}),
+    status: 'draft',
+    acceptedBy: [],
+    archivedByUserIds: [],
+    dismissedByUserIds: [],
+    decisionDeadline: null,
+    locked: false,
+    lockedAt: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  })
+  return ref.id
+}
+
 export async function updateProposal(proposalId, fields) {
   await updateDoc(doc(db, 'proposals', proposalId), {
     ...fields,
@@ -292,6 +328,29 @@ export const VOTABLE_FIELDS = ['date', 'time', 'activity', 'location', 'childcar
 // field and simply carry createdBy: null (no owner controls shown).
 export function createFieldOption(value, createdBy = null) {
   return { id: crypto.randomUUID(), value, votes: [], createdBy }
+}
+
+// Builds a fresh `voting` map for a copied proposal: each field keeps its
+// allowVoting flag and its option *values*, but votes are cleared, voting is
+// reopened (votingLocked: false), and every option gets a new id/author (the
+// copier). The `date` field's options are dropped — they're past dates and the
+// copy requires a new date — while its allowVoting flag is preserved so members
+// can re-suggest dates. Returns {} when the source had no voting.
+export function buildCopiedVoting(proposal, userId = null) {
+  const src = proposal?.voting
+  if (!src) return {}
+  const out = {}
+  for (const field of Object.keys(src)) {
+    const v = src[field]
+    if (!v) continue
+    const sourceOptions = field === 'date' ? [] : (v.options ?? [])
+    out[field] = {
+      allowVoting: !!v.allowVoting,
+      votingLocked: false,
+      options: sourceOptions.map((o) => createFieldOption(o.value, userId))
+    }
+  }
+  return out
 }
 
 // Time options read best in chronological order. HTML time inputs produce 24h

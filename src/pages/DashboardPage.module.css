@@ -388,6 +388,26 @@
   gap: 8px;
 }
 
+/* Copy-mode create form: source note + the required new-date field. */
+.copyNote {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  background: var(--surface-muted, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.copyDateLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  color: var(--fg-muted);
+}
+
 .muted {
   font-size: 14px;
   color: var(--fg-muted);

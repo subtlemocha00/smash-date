@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useGroups } from '../context/GroupContext'
 import { logOut } from '../services/firebase/auth'
@@ -7,13 +7,17 @@ import GroupSwitcher from '../components/GroupSwitcher'
 import GroupImage from '../components/GroupImage'
 import {
   createProposal,
+  createProposalFromCopy,
   subscribeToGroupProposals,
   isArchivedForUser,
   isProposalComplete,
   isDismissedForUser
 } from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
-import { subscribeToResponsibilitiesForProposals } from '../services/firebase/responsibilities'
+import {
+  subscribeToResponsibilitiesForProposals,
+  addResponsibilitiesForCopy
+} from '../services/firebase/responsibilities'
 import { proposalUrgency, URGENCY_ORDER } from '../utils/urgency'
 import styles from './DashboardPage.module.css'
 
@@ -49,6 +53,7 @@ export default function DashboardPage() {
   const { user, userProfile } = useAuth()
   const { groupsLoading, activeGroupId, activeGroup } = useGroups()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [proposals, setProposals] = useState([])
   const [proposalsLoading, setProposalsLoading] = useState(true)
@@ -61,7 +66,35 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
+  // When set, the create form is in "copy mode": pre-filled from an existing
+  // proposal and requiring a new date before it can be saved. The draft is a
+  // transient handoff from the proposal page (router state), never persisted.
+  const [copyDraft, setCopyDraft] = useState(null)
+  const [copyDate, setCopyDate] = useState('')
+
   const [showArchived, setShowArchived] = useState(false)
+
+  // Today's local date (YYYY-MM-DD) — the min for a copy's required new date, so
+  // a copy can't start already-past (which would lock it immediately).
+  const todayStr = (() => {
+    const d = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  })()
+
+  // Pick up a copy draft handed over from the proposal page, then clear it from
+  // history so a refresh or back-navigation doesn't resurrect it.
+  useEffect(() => {
+    const draft = location.state?.copyDraft
+    if (!draft) return
+    setCopyDraft(draft)
+    setNewTitle(draft.fields?.title || '')
+    setCopyDate('')
+    setCreateError('')
+    setShowNewForm(true)
+    navigate(location.pathname, { replace: true, state: {} })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!activeGroupId) {
@@ -146,12 +179,27 @@ export default function DashboardPage() {
 
   async function handleCreateProposal(e) {
     e.preventDefault()
-    if (creating) return
-    if (!newTitle.trim() || !activeGroupId) return
+    if (creating || !newTitle.trim()) return
+    // A copy must land in its source group and have a freshly chosen date; a
+    // plain new proposal just needs the active group.
+    if (copyDraft ? !copyDate : !activeGroupId) return
     setCreating(true)
     setCreateError('')
     try {
-      const proposalId = await createProposal(activeGroupId, user.uid, newTitle.trim())
+      let proposalId
+      if (copyDraft) {
+        proposalId = await createProposalFromCopy(copyDraft.groupId, user.uid, {
+          ...copyDraft.fields,
+          title: newTitle.trim(),
+          date: copyDate,
+          voting: copyDraft.voting
+        })
+        // The proposal must exist before its responsibilities (their create rule
+        // resolves the parent by id), so this is a separate write, not one batch.
+        await addResponsibilitiesForCopy(proposalId, copyDraft.responsibilities)
+      } else {
+        proposalId = await createProposal(activeGroupId, user.uid, newTitle.trim())
+      }
       await logActivity(
         proposalId,
         'proposal_created',
@@ -165,6 +213,8 @@ export default function DashboardPage() {
   }
 
   function openNewForm() {
+    setCopyDraft(null)
+    setCopyDate('')
     setNewTitle('')
     setCreateError('')
     setShowNewForm(true)
@@ -172,6 +222,8 @@ export default function DashboardPage() {
 
   function cancelNewForm() {
     setShowNewForm(false)
+    setCopyDraft(null)
+    setCopyDate('')
     setNewTitle('')
     setCreateError('')
   }
@@ -311,6 +363,13 @@ export default function DashboardPage() {
             <>
               {showNewForm && (
                 <form onSubmit={handleCreateProposal} className={styles.newForm}>
+                  {copyDraft && (
+                    <p className={styles.copyNote}>
+                      Copying “{copyDraft.sourceTitle || 'proposal'}”. Details,
+                      responsibilities, and voting options carry over — pick a new
+                      date to continue.
+                    </p>
+                  )}
                   <input
                     className={styles.newInput}
                     placeholder="Proposal title"
@@ -318,14 +377,33 @@ export default function DashboardPage() {
                     onChange={(e) => setNewTitle(e.target.value)}
                     autoFocus
                   />
+                  {copyDraft && (
+                    <label className={styles.copyDateLabel}>
+                      New date (required)
+                      <input
+                        type="date"
+                        className={styles.newInput}
+                        value={copyDate}
+                        min={todayStr}
+                        onChange={(e) => setCopyDate(e.target.value)}
+                        required
+                      />
+                    </label>
+                  )}
                   {createError && <p className={styles.errorMsg}>{createError}</p>}
                   <div className={styles.newFormActions}>
                     <button
                       className={styles.newBtn}
                       type="submit"
-                      disabled={creating || !newTitle.trim()}
+                      disabled={creating || !newTitle.trim() || (copyDraft && !copyDate)}
                     >
-                      {creating ? 'Creating…' : 'Create'}
+                      {creating
+                        ? copyDraft
+                          ? 'Copying…'
+                          : 'Creating…'
+                        : copyDraft
+                          ? 'Create copy'
+                          : 'Create'}
                     </button>
                     <button className={styles.cancelBtn} type="button" onClick={cancelNewForm}>
                       Cancel

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
@@ -24,6 +24,7 @@ import {
   isFieldVotingEnabled,
   isFieldVotingActive,
   getLeaders,
+  buildCopiedVoting,
   castVote,
   addFieldOption,
   updateFieldOption,
@@ -31,7 +32,7 @@ import {
   lockFieldToLeader,
   lockProposalVoting
 } from '../services/firebase/proposals'
-import { addComment, subscribeToComments } from '../services/firebase/comments'
+import { addComment, deleteComment, subscribeToComments } from '../services/firebase/comments'
 import {
   addResponsibility,
   toggleResponsibility,
@@ -106,15 +107,133 @@ function PencilIcon() {
   )
 }
 
+// Six-dot grip glyph marking the drag handle on a reorderable list item.
+// Inline SVG, themed via currentColor — consistent with PencilIcon and the
+// app's no-icon-dependency approach.
+function GripIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="9" cy="6" r="1.6" />
+      <circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" />
+      <circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" />
+      <circle cx="15" cy="18" r="1.6" />
+    </svg>
+  )
+}
+
 // Compact editor for a responsibility's optional details list. Shared by the
 // create form and the inline edit form. `items` is the working array of
 // strings; `onChange` receives the next array. Empty items are kept here for
 // editing and filtered out by the caller on save.
+//
+// Items are reorderable by dragging the grip handle. Order is purely the array
+// position (no per-item order field) — reordering just emits a permuted array,
+// which the caller persists through the normal save path. Drag uses Pointer
+// Events so the same code path covers mouse and touch; only the handle disables
+// touch scrolling (touch-action: none), so dragging never fires during a normal
+// scroll over the rest of the row.
 function DetailsListEditor({ items, onChange }) {
+  const rowRefs = useRef([])
+  const [dragIndex, setDragIndex] = useState(null)
+
+  const handlePointerDown = (i) => (e) => {
+    // Ignore non-primary mouse buttons; touch/pen have button -1/0.
+    if (e.button > 0) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDragIndex(i)
+  }
+
+  const handlePointerMove = (e) => {
+    if (dragIndex === null) return
+    const y = e.clientY
+    // Find the row the pointer now sits over by midpoint crossing: the first
+    // earlier row whose midpoint we've passed going up, or the last later row
+    // whose midpoint we've passed going down.
+    let target = dragIndex
+    for (let j = 0; j < rowRefs.current.length; j++) {
+      const el = rowRefs.current[j]
+      if (!el || j === dragIndex) continue
+      const rect = el.getBoundingClientRect()
+      const mid = rect.top + rect.height / 2
+      if (j < dragIndex && y < mid) {
+        target = j
+        break
+      }
+      if (j > dragIndex && y > mid) {
+        target = j
+      }
+    }
+    if (target !== dragIndex) {
+      const next = items.slice()
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(target, 0, moved)
+      onChange(next)
+      setDragIndex(target)
+    }
+  }
+
+  const endDrag = (e) => {
+    if (dragIndex === null) return
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      // capture may already be gone (e.g. pointercancel) — nothing to do.
+    }
+    setDragIndex(null)
+  }
+
+  // Keyboard fallback for accessibility / non-pointer users: move a focused
+  // handle up or down with the arrow keys.
+  const handleKeyDown = (i) => (e) => {
+    const dir = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+    if (!dir) return
+    const target = i + dir
+    if (target < 0 || target >= items.length) return
+    e.preventDefault()
+    const next = items.slice()
+    const [moved] = next.splice(i, 1)
+    next.splice(target, 0, moved)
+    onChange(next)
+  }
+
+  const showHandles = items.length > 1
+
   return (
     <div className={styles.detailsListEditor}>
       {items.map((item, i) => (
-        <div key={i} className={styles.detailsListEditRow}>
+        <div
+          key={i}
+          ref={(el) => {
+            rowRefs.current[i] = el
+          }}
+          className={`${styles.detailsListEditRow} ${dragIndex === i ? styles.detailsListEditRowDragging : ''
+            }`}
+        >
+          {showHandles && (
+            <button
+              type="button"
+              className={styles.detailsDragHandle}
+              onPointerDown={handlePointerDown(i)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onKeyDown={handleKeyDown(i)}
+              aria-label={`Reorder "${item || 'item'}" (use arrow keys to move)`}
+              title="Drag to reorder"
+            >
+              <GripIcon />
+            </button>
+          )}
           <input
             className={styles.detailsListInput}
             value={item}
@@ -521,6 +640,43 @@ export default function ProposalPage() {
       setActionError('Failed to delete. Please try again.')
       setDeleting(false)
     }
+  }
+
+  // Copy this proposal into a new one. Rather than writing a doc now (which would
+  // litter Firestore with abandoned copies), we carry the reusable content as a
+  // transient draft in router state to the Dashboard's create form, which writes
+  // it only when the user picks a new date and confirms. The copy stays in this
+  // proposal's group, and the user who confirms becomes its creator. Available to
+  // any group member, including on past/locked proposals (recurring plans).
+  function handleCopy() {
+    navigate('/dashboard', {
+      state: {
+        copyDraft: {
+          sourceTitle: proposal.title || '',
+          groupId: proposal.groupId,
+          fields: {
+            title: proposal.title || '',
+            description: proposal.description || '',
+            time: proposal.time || '',
+            activity: proposal.activity || '',
+            location: proposal.location || '',
+            childcareNotes: proposal.childcareNotes || '',
+            budget: proposal.budget || '',
+            notes: proposal.notes || ''
+          },
+          // Voting options carried over with votes reset; date options dropped.
+          voting: buildCopiedVoting(proposal, user.uid),
+          // Responsibilities carried over as fresh, incomplete work items.
+          responsibilities: responsibilities.map((r) => ({
+            title: r.title || '',
+            assignedTo: r.assignedTo ?? null,
+            assigneeName: r.assigneeName || '',
+            detailsNote: r.detailsNote || '',
+            detailsList: Array.isArray(r.detailsList) ? r.detailsList : []
+          }))
+        }
+      }
+    })
   }
 
   // Voting handlers read the latest options straight from proposal state (kept
@@ -1292,38 +1448,6 @@ export default function ProposalPage() {
           )}
         </section>
 
-        {/* Activity feed */}
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <button
-              className={styles.collapseToggle}
-              onClick={() => setActivityCollapsed((c) => !c)}
-              aria-expanded={!activityCollapsed}
-              type="button"
-            >
-              <span
-                className={`${styles.collapseChevron} ${activityCollapsed ? styles.collapseChevronClosed : ''}`}
-                aria-hidden="true"
-              />
-              <span className={styles.sectionTitle}>Activity</span>
-            </button>
-          </div>
-          {!activityCollapsed && (
-            activity.length === 0 ? (
-              <p className={styles.emptyState}>No activity yet.</p>
-            ) : (
-              <ul className={styles.activityList}>
-                {activity.map((e) => (
-                  <li key={e.id} className={styles.activityItem}>
-                    <span className={styles.activityDesc}>{e.description}</span>
-                    <span className={styles.activityTime}>{formatTime(e.createdAt)}</span>
-                  </li>
-                ))}
-              </ul>
-            )
-          )}
-        </section>
-
         {/* Comments */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Comments</h2>
@@ -1336,6 +1460,17 @@ export default function ProposalPage() {
                   <div className={styles.commentMeta}>
                     <span className={styles.commentAuthor}>{c.displayName}</span>
                     <span className={styles.commentTime}>{formatTime(c.createdAt)}</span>
+                    {c.userId === user.uid && (
+                      <button
+                        type="button"
+                        className={styles.commentDelete}
+                        onClick={() => deleteComment(c.id)}
+                        aria-label="Delete comment"
+                        title="Delete comment"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   <p className={styles.commentMsg}>{c.message}</p>
                 </li>
@@ -1370,10 +1505,58 @@ export default function ProposalPage() {
           )}
         </section>
 
+        {/* Activity feed */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <button
+              className={styles.collapseToggle}
+              onClick={() => setActivityCollapsed((c) => !c)}
+              aria-expanded={!activityCollapsed}
+              type="button"
+            >
+              <span
+                className={`${styles.collapseChevron} ${activityCollapsed ? styles.collapseChevronClosed : ''}`}
+                aria-hidden="true"
+              />
+              <span className={styles.sectionTitle}>Activity</span>
+            </button>
+          </div>
+          {!activityCollapsed && (
+            activity.length === 0 ? (
+              <p className={styles.emptyState}>No activity yet.</p>
+            ) : (
+              <ul className={styles.activityList}>
+                {activity.map((e) => (
+                  <li key={e.id} className={styles.activityItem}>
+                    <span className={styles.activityDesc}>{e.description}</span>
+                    <span className={styles.activityTime}>{formatTime(e.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
+        </section>
+
         {/* Manage. A completed proposal is fully locked: the only action anyone
             has is removing it from their own archive. */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Manage</h2>
+
+          {/* Copy is available to every member regardless of status/lock — it
+              creates a fresh proposal and never touches this one. */}
+          <div className={styles.manageRow}>
+            <button
+              className={styles.manageBtn}
+              onClick={handleCopy}
+              type="button"
+            >
+              Copy proposal
+            </button>
+            <span className={styles.manageHint}>
+              Reuse this plan for a new date — details, responsibilities, and
+              voting options carry over.
+            </span>
+          </div>
 
           {completed ? (
             <>

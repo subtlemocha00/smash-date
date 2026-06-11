@@ -11,6 +11,7 @@ import {
   isFieldVotingActive,
   createFieldOption,
   sortOptionsForField,
+  buildCopiedVoting,
   isDeadlinePassed,
   isProposalLocked
 } from './proposals'
@@ -268,5 +269,54 @@ describe('sortOptionsForField', () => {
     const options = [opt('a', '19:30'), opt('b', '08:00')]
     sortOptionsForField('time', options)
     expect(options.map((o) => o.value)).toEqual(['19:30', '08:00'])
+  })
+})
+
+describe('buildCopiedVoting', () => {
+  it('returns {} when the source proposal has no voting', () => {
+    expect(buildCopiedVoting({})).toEqual({})
+    expect(buildCopiedVoting(null)).toEqual({})
+  })
+
+  it('keeps option values but resets votes, ids, authorship, and the lock', () => {
+    const proposal = {
+      voting: {
+        location: {
+          allowVoting: true,
+          votingLocked: true,
+          options: [
+            { id: 'old-1', value: 'Sushi', votes: ['u1', 'u2'], createdBy: 'sarah' },
+            { id: 'old-2', value: 'Pizza', votes: ['u3'], createdBy: 'sarah' }
+          ]
+        }
+      }
+    }
+    const out = buildCopiedVoting(proposal, 'kevin')
+    expect(out.location.allowVoting).toBe(true)
+    expect(out.location.votingLocked).toBe(false)
+    expect(out.location.options.map((o) => o.value)).toEqual(['Sushi', 'Pizza'])
+    out.location.options.forEach((o) => {
+      expect(o.votes).toEqual([])
+      expect(o.createdBy).toBe('kevin')
+    })
+    // Fresh ids — none of the originals carry over.
+    expect(out.location.options.map((o) => o.id)).not.toContain('old-1')
+    expect(out.location.options.map((o) => o.id)).not.toContain('old-2')
+  })
+
+  it('drops the date field options (stale past dates) but keeps its flag', () => {
+    const proposal = {
+      voting: {
+        date: {
+          allowVoting: true,
+          votingLocked: true,
+          options: [{ id: 'd1', value: '2020-01-01', votes: ['u1'], createdBy: 'sarah' }]
+        }
+      }
+    }
+    const out = buildCopiedVoting(proposal, 'kevin')
+    expect(out.date.allowVoting).toBe(true)
+    expect(out.date.votingLocked).toBe(false)
+    expect(out.date.options).toEqual([])
   })
 })

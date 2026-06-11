@@ -1,6 +1,8 @@
 import {
   collection,
+  doc,
   addDoc,
+  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -16,6 +18,12 @@ export async function addComment(proposalId, userId, displayName, message) {
     message,
     createdAt: serverTimestamp()
   })
+}
+
+// Removes a single comment. Only the comment's author may do this; the caller
+// gates the UI and Firestore rules enforce it server-side.
+export async function deleteComment(id) {
+  await deleteDoc(doc(db, 'comments', id))
 }
 
 export function subscribeToComments(proposalId, callback) {

@@ -4,6 +4,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   onSnapshot,
   query,
   where,
@@ -32,6 +33,29 @@ export async function addResponsibility(
     detailsList,
     createdAt: serverTimestamp()
   })
+}
+
+// Bulk-creates responsibilities on a freshly copied proposal in one atomic
+// batch. Each item carries over its planning content (title, assignment, and
+// optional details) but starts incomplete — a copy is fresh work to do. The
+// target proposal must already exist (the create rule resolves it by id).
+export async function addResponsibilitiesForCopy(proposalId, items) {
+  if (!items || items.length === 0) return
+  const batch = writeBatch(db)
+  items.forEach((r) => {
+    const ref = doc(collection(db, 'responsibilities'))
+    batch.set(ref, {
+      proposalId,
+      title: r.title || '',
+      assignedTo: r.assignedTo ?? null,
+      assigneeName: r.assigneeName || '',
+      completed: false,
+      detailsNote: r.detailsNote || '',
+      detailsList: Array.isArray(r.detailsList) ? r.detailsList : [],
+      createdAt: serverTimestamp()
+    })
+  })
+  await batch.commit()
 }
 
 export async function toggleResponsibility(id, completed) {

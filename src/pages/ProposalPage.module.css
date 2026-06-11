@@ -758,6 +758,46 @@
   gap: 6px;
 }
 
+/* Lifts the row being dragged so it reads as "picked up" against the others. */
+.detailsListEditRowDragging {
+  background: var(--surface-muted, var(--surface));
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.detailsDragHandle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Generous hit area for touch; ~28px square stays comfortable at 350px. */
+  width: 28px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--fg-faint);
+  cursor: grab;
+  /* Drag only starts from the handle, so disabling touch scrolling here keeps
+     normal list/page scrolling intact everywhere else on the row. */
+  touch-action: none;
+}
+
+.detailsDragHandle:hover {
+  color: var(--fg-muted);
+}
+
+.detailsDragHandle:active {
+  cursor: grabbing;
+}
+
+.detailsDragHandle:focus-visible {
+  outline: none;
+  color: var(--fg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
 .detailsListInput {
   flex: 1;
   min-width: 0;
@@ -965,6 +1005,22 @@
   font-size: 11px;
   color: var(--fg-faint);
   font-family: var(--font-mono);
+}
+
+.commentDelete {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--fg-faint);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.commentDelete:hover {
+  color: var(--coral-700);
 }
 
 .commentMsg {

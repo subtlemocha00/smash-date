@@ -70,7 +70,7 @@ src/
       groups.js               # createGroup, joinGroupByCode, subscribeToUserGroups, setActiveGroupId,
                               #   setMemberName, renameGroup, removeMember, deleteGroup
       proposals.js            # createProposal, updateProposal, subscribeToGroupProposals, subscribeToProposal
-      comments.js             # addComment, subscribeToComments
+      comments.js             # addComment, deleteComment, subscribeToComments
       responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
   styles/
@@ -217,6 +217,12 @@ these fields existed render normally (the UI treats missing values as `''` /
 editable by any group member until the proposal is locked/confirmed, after which
 they become read-only.
 
+`detailsList` items support custom ordering. In the editor, each item has a grip
+handle: drag it (mouse or touch) — or focus it and press Up/Down — to reorder.
+Order is simply the array position, so the chosen order is preserved on save and
+across refreshes with no extra fields or migration. Reordering follows the same
+lock rules as other detail edits (available until the proposal is locked).
+
 ### `activityEvents/{eventId}`
 
 ```js
@@ -276,6 +282,7 @@ Rules live in `firestore.rules` and enforce:
 - **Groups** are readable only by members. Create requires the creator to be a member and to set `createdBy` to themselves. Updates are limited to: the owner (rename / remove members / general edits), a valid-invite holder adding only themselves (`isSelfJoin`), or any member writing only their own `memberNames` entry (`isOwnNameUpdate`). Delete is owner-only.
 - **Group invites** are readable by any authenticated user (needed to join); only the referenced group's owner may create or delete one.
 - **Proposals / comments / responsibilities** are scoped to group membership. `groupId` (proposals) and `proposalId` / `userId` (comments, responsibilities) are immutable on update.
+- **Comment deletion** is restricted to the comment's own author (the proposal creator and group owner may also remove comments as part of the proposal / group cascade delete).
 - **Decision Deadline / lock** (proposals): the `locked`, `lockedAt`, and `decisionDeadline` fields may only be changed by the proposal creator. While a proposal is locked (manual lock or a passed `decisionDeadline`, evaluated against `request.time`), it is read-only to everyone but the creator — except for a member's own personal archive/dismiss write. Comment creation is blocked while the parent proposal is locked.
 - **Activity events** are append-only; only the group owner may delete them.
 
@@ -292,6 +299,7 @@ Rules live in `firestore.rules` and enforce:
 - Multi-group membership: create, join by invite code, switch active group, rename, remove members, delete group (owner-only).
 - Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), realtime proposals list.
 - Proposal creation (title required; all other fields optional) and full field editing with a "Saved" confirmation.
+- **Copy proposal:** any group member can reuse an existing proposal as the basis for a new one (handy for recurring plans). It opens the create form pre-filled and only writes to Firestore once the copy is confirmed, so abandoned copies are never created. The person making the copy becomes the new proposal's creator/owner, and the copy stays in the original's group. The **date is reset** and a new one is required before saving; **votes are cleared** (option choices carry over with zero votes, voting reopened; stale date options are dropped); **responsibilities carry over but reset to incomplete** (including their note/list details). History does not carry over — the copy starts as a fresh `draft` with no status/acceptance/lock/activity, and **comments are not copied** (discussion is specific to the original).
 - Proposal status system with explicit transitions and in-flight disabling.
 - **Decision Deadline:** creators set a date/time (or lock manually) after which collaboration closes and the proposal goes read-only for other members; creators can reopen to resume. Enforced in the UI and Firestore rules.
 - Responsibilities with assignee and completion toggle; comments; per-proposal activity feed.

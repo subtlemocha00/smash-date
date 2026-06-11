@@ -217,9 +217,18 @@ service cloud.firestore {
         )
         && request.resource.data.proposalId == resource.data.proposalId
         && request.resource.data.userId == resource.data.userId;
+      // Only the comment's author may delete their own comment. The proposal
+      // creator and group owner may also remove it as part of the proposal /
+      // group cascade delete (those reads resolve against pre-batch state).
       allow delete: if isGroupMember(
-        get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
-      );
+          get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+        ) && (
+          resource.data.userId == request.auth.uid
+          || isProposalCreatorById(resource.data.proposalId)
+          || isGroupCreator(
+               get(/databases/$(database)/documents/proposals/$(resource.data.proposalId)).data.groupId
+             )
+        );
     }
 
     match /responsibilities/{responsibilityId} {
