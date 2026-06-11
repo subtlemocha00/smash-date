@@ -41,6 +41,7 @@ import {
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
+import { todayDateString, isPastDate } from '../utils/dates'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -441,6 +442,13 @@ export default function ProposalPage() {
 
   async function saveEditing() {
     if (saving || !editFields.title.trim()) return
+    // Reject moving the date into the past. Only validate when the date actually
+    // changed, so a historical proposal that already has a past date can still
+    // have its other fields edited and saved without being forced to a new date.
+    if (editFields.date !== proposal.date && isPastDate(editFields.date)) {
+      setSaveError('The date can’t be in the past. Choose today or a future date.')
+      return
+    }
     setSaving(true)
     setSaveError('')
     try {
@@ -1023,6 +1031,10 @@ export default function ProposalPage() {
                         name={f.key}
                         type={f.type}
                         multiline={f.multiline}
+                        // Proposal dates can't be set before today (historical
+                        // past dates stay editable only if left unchanged — see
+                        // saveEditing).
+                        min={f.key === 'date' ? todayDateString() : undefined}
                         value={editFields[f.key]}
                         onChange={(v) => setEditFields((s) => ({ ...s, [f.key]: v }))}
                       />
@@ -1738,7 +1750,7 @@ function FieldView({ label, value }) {
   )
 }
 
-function FieldInput({ label, name, value, onChange, type = 'text', multiline = false }) {
+function FieldInput({ label, name, value, onChange, type = 'text', multiline = false, min }) {
   return (
     <div className={styles.fieldRow}>
       <label className={styles.fieldLabel} htmlFor={name}>
@@ -1757,6 +1769,7 @@ function FieldInput({ label, name, value, onChange, type = 'text', multiline = f
           id={name}
           className={styles.fieldInput}
           type={type}
+          min={min}
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -1793,6 +1806,10 @@ function VotingField({
   const interactive = !locked && !frozen
   const leaders = getLeaders(options)
   const uniqueLeader = leaders.length === 1 ? leaders[0] : null
+
+  // Date options follow the same rule as the proposal date: today or later only.
+  // `dateMin` drives the picker; isPastDate guards manual entry before save.
+  const dateMin = inputType === 'date' ? todayDateString() : undefined
 
   async function run(action) {
     if (busy) return
@@ -1842,6 +1859,7 @@ function VotingField({
                   <input
                     className={styles.optionInput}
                     type={inputType}
+                    min={dateMin}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     disabled={busy}
@@ -1850,12 +1868,19 @@ function VotingField({
                     type="button"
                     className={styles.addBtn}
                     disabled={busy || !editValue.trim()}
-                    onClick={() =>
+                    onClick={() => {
+                      const value = editValue.trim()
+                      // Only block when the value actually changed to a past date,
+                      // so an existing past option can be left as-is on legacy data.
+                      if (inputType === 'date' && value !== o.value && isPastDate(value)) {
+                        setError('The date can’t be in the past. Choose today or a future date.')
+                        return
+                      }
                       run(async () => {
-                        await onEditOption(field, o.id, editValue.trim())
+                        await onEditOption(field, o.id, value)
                         setEditingId(null)
                       })
-                    }
+                    }}
                   >
                     Save
                   </button>
@@ -1928,9 +1953,14 @@ function VotingField({
             className={styles.optionAddForm}
             onSubmit={(e) => {
               e.preventDefault()
-              if (!newOption.trim()) return
+              const value = newOption.trim()
+              if (!value) return
+              if (inputType === 'date' && isPastDate(value)) {
+                setError('The date can’t be in the past. Choose today or a future date.')
+                return
+              }
               run(async () => {
-                await onAddOption(field, newOption.trim())
+                await onAddOption(field, value)
                 setNewOption('')
               })
             }}
@@ -1938,6 +1968,7 @@ function VotingField({
             <input
               className={styles.optionInput}
               type={inputType}
+              min={dateMin}
               placeholder={inputType === 'text' ? `Add a ${label.toLowerCase()} option` : undefined}
               value={newOption}
               onChange={(e) => setNewOption(e.target.value)}

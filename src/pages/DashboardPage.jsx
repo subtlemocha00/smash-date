@@ -19,6 +19,7 @@ import {
   addResponsibilitiesForCopy
 } from '../services/firebase/responsibilities'
 import { proposalUrgency, URGENCY_ORDER } from '../utils/urgency'
+import { todayDateString, isPastDate } from '../utils/dates'
 import styles from './DashboardPage.module.css'
 
 const STATUS_LABELS = {
@@ -76,11 +77,7 @@ export default function DashboardPage() {
 
   // Today's local date (YYYY-MM-DD) — the min for a copy's required new date, so
   // a copy can't start already-past (which would lock it immediately).
-  const todayStr = (() => {
-    const d = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  })()
+  const todayStr = todayDateString()
 
   // Pick up a copy draft handed over from the proposal page, then clear it from
   // history so a refresh or back-navigation doesn't resurrect it.
@@ -183,6 +180,11 @@ export default function DashboardPage() {
     // A copy must land in its source group and have a freshly chosen date; a
     // plain new proposal just needs the active group.
     if (copyDraft ? !copyDate : !activeGroupId) return
+    // Guard against a past date reaching save (manual entry / picker bypass).
+    if (copyDraft && isPastDate(copyDate)) {
+      setCreateError('The date can’t be in the past. Choose today or a future date.')
+      return
+    }
     setCreating(true)
     setCreateError('')
     try {
