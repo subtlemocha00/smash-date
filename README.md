@@ -120,6 +120,7 @@ The LoginPage has three modes on a single public `/login` route: **Sign In**, **
 - The active group is remembered in `localStorage` (per uid) and mirrored to `users/{uid}.activeGroupId`.
 - `GroupSwitcher` switches the active group and hosts inline create/join. `GroupManager` (in Settings) handles rename, member removal, and group deletion.
 - Display names are denormalized into `groups/{groupId}.memberNames` because Firestore rules only let a user read their own `users/{uid}` document.
+- **Per-group display name:** each member may override how they appear in a given group via `groups/{groupId}.memberDisplayNames[uid]` (edited under Settings → Group). Name resolution is override → denormalized account name → email prefix (`resolveMemberName`), so a member can use a different name in each group without touching their Firebase Auth profile. Missing field falls back gracefully; no migration. Changes propagate live (the proposal page subscribes to the group), updating the assignee picker, assignee labels, comment authors, and newly written activity/comments.
 
 ---
 
@@ -146,7 +147,8 @@ The LoginPage has three modes on a single public `/login` route: **Sign In**, **
   memberIds: string[],              // supports >2 members
   createdBy: string,                // owner uid (legacy groups may omit this)
   inviteCode: string,               // 6-char uppercase alphanumeric
-  memberNames: { [uid]: string },   // denormalized display names
+  memberNames: { [uid]: string },   // denormalized account names (fallback)
+  memberDisplayNames: { [uid]: string }, // optional per-group name overrides
   createdAt: Timestamp
 }
 ```
@@ -279,7 +281,7 @@ This is enforced both in the UI and in Firestore rules (see below).
 Rules live in `firestore.rules` and enforce:
 
 - **Users** can read/write only their own `users/{uid}` document.
-- **Groups** are readable only by members. Create requires the creator to be a member and to set `createdBy` to themselves. Updates are limited to: the owner (rename / remove members / general edits), a valid-invite holder adding only themselves (`isSelfJoin`), or any member writing only their own `memberNames` entry (`isOwnNameUpdate`). Delete is owner-only.
+- **Groups** are readable only by members. Create requires the creator to be a member and to set `createdBy` to themselves. Updates are limited to: the owner (rename / remove members / general edits), a valid-invite holder adding only themselves (`isSelfJoin`), or any member writing only their own `memberNames` / `memberDisplayNames` entry (`isOwnNameUpdate` — a member can't edit anyone else's name). Delete is owner-only.
 - **Group invites** are readable by any authenticated user (needed to join); only the referenced group's owner may create or delete one.
 - **Proposals / comments / responsibilities** are scoped to group membership. `groupId` (proposals) and `proposalId` / `userId` (comments, responsibilities) are immutable on update.
 - **Comment deletion** is restricted to the comment's own author (the proposal creator and group owner may also remove comments as part of the proposal / group cascade delete).
@@ -297,6 +299,7 @@ Rules live in `firestore.rules` and enforce:
 - Firestore user profile auto-created on first sign-in, with a graceful fallback if the profile can't be loaded.
 - Light/dark theme with no flash-of-wrong-theme (applied pre-paint).
 - Multi-group membership: create, join by invite code, switch active group, rename, remove members, delete group (owner-only).
+- Per-group display name override (Settings → Group): customize how you appear in each group independently of your account name; blank reverts to the account name.
 - Dashboard: group switcher, "Needs Attention" list, "My Responsibilities" (tasks assigned to you, with emphasis that escalates as the proposal date nears), realtime proposals list.
 - Proposal creation (title required; all other fields optional) and full field editing with a "Saved" confirmation.
 - **Proposal dates cannot be earlier than today** (today or any future date only). Enforced when setting a date while editing, when copying a proposal, and when adding or editing a **date voting option** — the date picker's minimum is today (in the user's local timezone) and a pre-save check rejects any past date that bypasses the picker. Existing proposals whose date is already in the past are unaffected: they still load, display, and stay editable as long as the date is left unchanged.

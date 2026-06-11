@@ -20,6 +20,7 @@ import {
 } from '../services/firebase/responsibilities'
 import { proposalUrgency, URGENCY_ORDER } from '../utils/urgency'
 import { todayDateString, isPastDate } from '../utils/dates'
+import { resolveMemberName } from '../utils/memberNames'
 import styles from './DashboardPage.module.css'
 
 const STATUS_LABELS = {
@@ -202,10 +203,15 @@ export default function DashboardPage() {
       } else {
         proposalId = await createProposal(activeGroupId, user.uid, newTitle.trim())
       }
+      // Use the creator's name as it appears in this group (override → account).
+      const selfName =
+        resolveMemberName(activeGroup, user.uid, { email: user.email }) ||
+        userProfile.displayName ||
+        'Someone'
       await logActivity(
         proposalId,
         'proposal_created',
-        `${userProfile.displayName || 'Someone'} created this proposal`
+        `${selfName} created this proposal`
       )
       navigate(`/proposal/${proposalId}`)
     } catch {

@@ -3,7 +3,13 @@ import { doc, getDoc } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import { useGroups } from '../context/GroupContext'
 import { db } from '../services/firebase/firestore'
-import { renameGroup, removeMember, deleteGroup } from '../services/firebase/groups'
+import {
+  renameGroup,
+  removeMember,
+  deleteGroup,
+  setMemberDisplayName
+} from '../services/firebase/groups'
+import { resolveMemberName } from '../utils/memberNames'
 import styles from './GroupManager.module.css'
 
 // Best-effort display name for a member uid. Firestore rules only guarantee a
@@ -13,7 +19,7 @@ function shortUid(uid) {
 }
 
 export default function GroupManager() {
-  const { user } = useAuth()
+  const { user, userProfile } = useAuth()
   const { activeGroup } = useGroups()
 
   const [memberNames, setMemberNames] = useState({})
@@ -25,7 +31,17 @@ export default function GroupManager() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
+  // The current user's group-specific display name override (this group only).
+  const [displayNameInput, setDisplayNameInput] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState('')
+  const [nameSaved, setNameSaved] = useState(false)
+
   const memberIds = activeGroup?.memberIds ?? []
+  // The current override as stored, and the account-name fallback shown when no
+  // override is set.
+  const currentOverride = activeGroup?.memberDisplayNames?.[user.uid] ?? ''
+  const accountName = userProfile?.displayName || user.email || ''
   // Legacy groups created before createdBy existed let any member manage them.
   const isOwner = activeGroup
     ? activeGroup.createdBy === user.uid || !activeGroup.createdBy
@@ -34,6 +50,16 @@ export default function GroupManager() {
   useEffect(() => {
     setName(activeGroup?.name ?? '')
   }, [activeGroup?.id, activeGroup?.name])
+
+  // On group switch, seed the field from that group's stored override and clear
+  // any prior status. Keyed on the group id only, so the realtime update that
+  // lands right after a save (same group) doesn't wipe the "Saved." confirmation.
+  useEffect(() => {
+    setDisplayNameInput(activeGroup?.memberDisplayNames?.[user.uid] ?? '')
+    setNameSaved(false)
+    setNameError('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroup?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -80,6 +106,33 @@ export default function GroupManager() {
     }
   }
 
+  async function saveDisplayName(value) {
+    const trimmed = value.trim()
+    if (trimmed === currentOverride) return
+    setSavingName(true)
+    setNameError('')
+    setNameSaved(false)
+    try {
+      // Group-scoped only — this never touches Firebase Auth or the user profile.
+      await setMemberDisplayName(activeGroup.id, user.uid, trimmed)
+      setNameSaved(true)
+    } catch {
+      setNameError('Failed to save your name. Please try again.')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  function handleSaveDisplayName(e) {
+    e.preventDefault()
+    saveDisplayName(displayNameInput)
+  }
+
+  function handleResetDisplayName() {
+    setDisplayNameInput('')
+    saveDisplayName('')
+  }
+
   async function handleRemove(uid) {
     setRemovingId(uid)
     setRemoveError('')
@@ -112,6 +165,51 @@ export default function GroupManager() {
 
   return (
     <div className={styles.wrapper}>
+      {/* Per-group display name. Lets the current user customize how they appear
+          in this group only, without changing their account name. */}
+      <form onSubmit={handleSaveDisplayName} className={styles.nameField}>
+        <label className={styles.fieldLabel} htmlFor="groupDisplayName">
+          Your name in this group
+        </label>
+        <div className={styles.nameRow}>
+          <input
+            id="groupDisplayName"
+            className={styles.input}
+            value={displayNameInput}
+            onChange={(e) => {
+              setDisplayNameInput(e.target.value)
+              setNameSaved(false)
+            }}
+            placeholder={accountName}
+            maxLength={60}
+            aria-label="Your display name in this group"
+          />
+          <button
+            className={styles.primaryBtn}
+            type="submit"
+            disabled={savingName || displayNameInput.trim() === currentOverride}
+          >
+            {savingName ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {currentOverride ? (
+          <button
+            type="button"
+            className={styles.linkBtn}
+            onClick={handleResetDisplayName}
+            disabled={savingName}
+          >
+            Use account name ({accountName})
+          </button>
+        ) : (
+          <p className={styles.muted}>
+            Leave blank to use your account name ({accountName}).
+          </p>
+        )}
+        {nameSaved && <p className={styles.success}>Saved.</p>}
+        {nameError && <p className={styles.error}>{nameError}</p>}
+      </form>
+
       <form onSubmit={handleRename} className={styles.renameRow}>
         <input
           className={styles.input}
@@ -138,10 +236,18 @@ export default function GroupManager() {
         {memberIds.map((uid) => {
           const isSelf = uid === user.uid
           const isGroupOwner = activeGroup.createdBy === uid
+          // Prefer the group's resolved name (override → denormalized account
+          // name); fall back to the directly-read profile name, then a short uid.
+          const resolved = resolveMemberName(
+            activeGroup,
+            uid,
+            isSelf ? { email: user.email } : {}
+          )
+          const shownName = resolved || memberNames[uid] || shortUid(uid)
           return (
             <li key={uid} className={styles.memberItem}>
               <span className={styles.memberName}>
-                {memberNames[uid] ?? shortUid(uid)}
+                {shownName}
                 {isSelf && <span className={styles.tag}>You</span>}
                 {isGroupOwner && <span className={styles.tag}>Owner</span>}
               </span>

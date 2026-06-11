@@ -10,6 +10,55 @@
   align-items: center;
 }
 
+/* Per-group display-name editor */
+.nameField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  color: var(--fg);
+}
+
+.nameRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.linkBtn {
+  align-self: flex-start;
+  font-family: var(--font-body);
+  font-size: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--fg-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkBtn:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.linkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.success {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
 .input {
   flex: 1;
   min-width: 0;

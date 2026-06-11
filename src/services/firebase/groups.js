@@ -12,7 +12,8 @@ import {
   writeBatch,
   serverTimestamp,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  deleteField
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db } from './firestore'
@@ -106,6 +107,27 @@ export async function setActiveGroupId(userId, groupId) {
 // here). Each member writes only their own entry — see the isOwnNameUpdate rule.
 export async function setMemberName(groupId, uid, name) {
   await updateDoc(doc(db, 'groups', groupId), { [`memberNames.${uid}`]: name })
+}
+
+// Sets (or clears) the caller's group-specific display name override. An empty
+// value removes the override entirely, so the name falls back to the account
+// name. Each member may write only their own entry — see isOwnNameUpdate. This
+// never touches Firebase Auth or the global user profile; it's group-scoped.
+export async function setMemberDisplayName(groupId, uid, name) {
+  const trimmed = (name ?? '').trim()
+  await updateDoc(doc(db, 'groups', groupId), {
+    [`memberDisplayNames.${uid}`]: trimmed ? trimmed : deleteField()
+  })
+}
+
+// Realtime subscription to a single group document (read is membership-gated by
+// the rules). Used where a live view of member names/overrides is needed.
+export function subscribeToGroup(groupId, callback, onError) {
+  return onSnapshot(
+    doc(db, 'groups', groupId),
+    (snap) => callback(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    onError ?? (() => {})
+  )
 }
 
 export async function renameGroup(groupId, name) {

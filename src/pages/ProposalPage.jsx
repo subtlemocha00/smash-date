@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
-import { db } from '../services/firebase/firestore'
 import {
   subscribeToProposal,
   updateProposal,
@@ -41,7 +39,9 @@ import {
   subscribeToResponsibilities
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
+import { subscribeToGroup } from '../services/firebase/groups'
 import { todayDateString, isPastDate } from '../utils/dates'
+import { resolveMemberName } from '../utils/memberNames'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -367,28 +367,27 @@ export default function ProposalPage() {
     }
   }, [id, proposal?.id])
 
+  // Realtime so a member renaming themselves in this group (a per-group display
+  // name override) is reflected immediately in the assignee picker, assignee
+  // labels, comment authors, and new activity — no refresh needed.
   useEffect(() => {
     if (!proposal?.groupId) return
-    async function loadMembers() {
-      try {
-        const groupSnap = await getDoc(doc(db, 'groups', proposal.groupId))
-        if (!groupSnap.exists()) return
-        const data = groupSnap.data()
-        const ids = data.memberIds ?? []
-        const names = data.memberNames ?? {}
-        setMemberIds(ids)
-        // Names are denormalized on the group (we can't read other users' docs).
-        const map = {}
-        ids.forEach((uid) => {
-          map[uid] = names[uid] || 'Group member'
-        })
-        setMembers(map)
-      } catch {
-        // Members won't be available for assignment, but page still works
-      }
-    }
-    loadMembers()
-  }, [proposal?.groupId])
+    const unsub = subscribeToGroup(proposal.groupId, (group) => {
+      if (!group) return
+      const ids = group.memberIds ?? []
+      setMemberIds(ids)
+      // Names are denormalized on the group (we can't read other users' docs),
+      // with each member's optional per-group override applied on top.
+      const map = {}
+      ids.forEach((mid) => {
+        map[mid] =
+          resolveMemberName(group, mid, mid === user.uid ? { email: user.email } : {}) ||
+          'Group member'
+      })
+      setMembers(map)
+    })
+    return unsub
+  }, [proposal?.groupId, user.uid, user.email])
 
   // A confirmed (or completed) proposal is locked, so never leave the editor
   // open for one — e.g. if it's confirmed in another tab while a member edits.
@@ -463,7 +462,7 @@ export default function ProposalPage() {
       await logActivity(
         id,
         'fields_updated',
-        `${userProfile.displayName || 'Someone'} updated the proposal details`
+        `${actorName} updated the proposal details`
       )
       setEditing(false)
       setSaveSuccess(true)
@@ -491,7 +490,10 @@ export default function ProposalPage() {
     }
   }
 
-  const actorName = userProfile.displayName || 'Someone'
+  // The current user's name *as it appears in this group* (override → account
+  // name → email prefix), used for new activity entries and comment authorship.
+  const selfName = members[user.uid] || userProfile.displayName || user.email
+  const actorName = members[user.uid] || userProfile.displayName || 'Someone'
 
   function handlePropose() {
     runAction(
@@ -741,11 +743,11 @@ export default function ProposalPage() {
     setCommentSubmitting(true)
     setCommentError('')
     try {
-      await addComment(id, user.uid, userProfile.displayName || user.email, commentText.trim())
+      await addComment(id, user.uid, selfName, commentText.trim())
       await logActivity(
         id,
         'comment_added',
-        `${userProfile.displayName || 'Someone'} added a comment`
+        `${actorName} added a comment`
       )
       setCommentText('')
     } catch {
@@ -769,8 +771,8 @@ export default function ProposalPage() {
         id,
         'responsibility_assigned',
         respAssignee
-          ? `${userProfile.displayName || 'Someone'} assigned "${respTitle.trim()}" to ${assigneeName}`
-          : `${userProfile.displayName || 'Someone'} added "${respTitle.trim()}"`
+          ? `${actorName} assigned "${respTitle.trim()}" to ${assigneeName}`
+          : `${actorName} added "${respTitle.trim()}"`
       )
       setRespTitle('')
       setRespAssignee('')
@@ -831,8 +833,8 @@ export default function ProposalPage() {
       // Preserve the assignment activity log when the assignee changes.
       if (newUid !== (r.assignedTo || null)) {
         const actMsg = newUid
-          ? `${userProfile.displayName || 'Someone'} reassigned "${title}" to ${newName}`
-          : `${userProfile.displayName || 'Someone'} unassigned "${title}"`
+          ? `${actorName} reassigned "${title}" to ${newName}`
+          : `${actorName} unassigned "${title}"`
         await logActivity(id, 'responsibility_assigned', actMsg)
       }
       // Collapse a now-empty details panel so there's nothing dangling to read.
@@ -1301,9 +1303,14 @@ export default function ProposalPage() {
                             {expanded ? 'Hide' : 'Details'}
                           </button>
                         )}
-                        {/* Assignment is display-only; editing happens via Edit. */}
+                        {/* Assignment is display-only; editing happens via Edit.
+                            Resolve the name live from the assignee's uid so a
+                            group-name change shows immediately; fall back to the
+                            stored snapshot for members who've since left. */}
                         <span className={styles.respAssignee}>
-                          {r.assigneeName || 'Unassigned'}
+                          {(r.assignedTo && members[r.assignedTo]) ||
+                            r.assigneeName ||
+                            'Unassigned'}
                         </span>
                       </div>
                       {/* Right action rail: spans both rows, vertically centered. */}
@@ -1482,7 +1489,9 @@ export default function ProposalPage() {
               {comments.map((c) => (
                 <li key={c.id} className={styles.comment}>
                   <div className={styles.commentMeta}>
-                    <span className={styles.commentAuthor}>{c.displayName}</span>
+                    <span className={styles.commentAuthor}>
+                      {(c.userId && members[c.userId]) || c.displayName}
+                    </span>
                     <span className={styles.commentTime}>{formatTime(c.createdAt)}</span>
                     {c.userId === user.uid && (
                       <button
