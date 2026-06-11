@@ -1273,52 +1273,64 @@ export default function ProposalPage() {
                 return (
                   <li key={r.id} className={styles.respItem}>
                     <div className={styles.respItemMain}>
-                      <label className={styles.respLabel}>
-                        <input
-                          type="checkbox"
-                          checked={r.completed}
-                          onChange={() => toggleResponsibility(r.id, !r.completed)}
-                          className={styles.respCheck}
-                          disabled={completed}
-                        />
+                      {/* Row 1: title doubles as the completion toggle (the old
+                          checkbox was redundant). Disabled once the plan is
+                          complete, mirroring the previous checkbox behavior. */}
+                      <button
+                        type="button"
+                        className={styles.respTitleBtn}
+                        onClick={() => toggleResponsibility(r.id, !r.completed)}
+                        disabled={completed}
+                        aria-pressed={r.completed}
+                        title={completed ? undefined : 'Toggle complete'}
+                      >
                         <span className={r.completed ? styles.respTitleDone : styles.respTitle}>
                           {r.title}
                         </span>
-                      </label>
-                      {showDetailsToggle && (
-                        <button
-                          type="button"
-                          className={styles.detailsToggle}
-                          onClick={() => toggleExpanded(r.id)}
-                          aria-expanded={expanded}
-                        >
-                          {expanded ? 'Hide' : 'Details'}
-                        </button>
-                      )}
-                      {/* Assignment is display-only; editing happens via Edit. */}
-                      <span className={styles.respAssignee}>
-                        {r.assigneeName || 'Unassigned'}
-                      </span>
-                      {!editLocked && !editingThis && (
-                        <button
-                          type="button"
-                          className={styles.respEditBtn}
-                          onClick={() => startEdit(r)}
-                          aria-label={`Edit "${r.title}"`}
-                          title="Edit responsibility"
-                        >
-                          <PencilIcon />
-                        </button>
-                      )}
-                      {!detailsLocked && (
-                        <button
-                          className={styles.removeBtn}
-                          onClick={() => deleteResponsibility(r.id)}
-                          type="button"
-                          aria-label="Remove"
-                        >
-                          ×
-                        </button>
+                      </button>
+                      {/* Row 2: secondary info only — Details + assignment. No
+                          action controls live here (they're in the rail). */}
+                      <div className={styles.respSecondary}>
+                        {showDetailsToggle && (
+                          <button
+                            type="button"
+                            className={styles.detailsToggle}
+                            onClick={() => toggleExpanded(r.id)}
+                            aria-expanded={expanded}
+                          >
+                            {expanded ? 'Hide' : 'Details'}
+                          </button>
+                        )}
+                        {/* Assignment is display-only; editing happens via Edit. */}
+                        <span className={styles.respAssignee}>
+                          {r.assigneeName || 'Unassigned'}
+                        </span>
+                      </div>
+                      {/* Right action rail: spans both rows, vertically centered. */}
+                      {((!editLocked && !editingThis) || !detailsLocked) && (
+                        <div className={styles.respActions}>
+                          {!editLocked && !editingThis && (
+                            <button
+                              type="button"
+                              className={styles.respEditBtn}
+                              onClick={() => startEdit(r)}
+                              aria-label={`Edit "${r.title}"`}
+                              title="Edit responsibility"
+                            >
+                              <PencilIcon />
+                            </button>
+                          )}
+                          {!detailsLocked && (
+                            <button
+                              className={styles.removeBtn}
+                              onClick={() => deleteResponsibility(r.id)}
+                              type="button"
+                              aria-label="Remove"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                     {editingThis ? (
