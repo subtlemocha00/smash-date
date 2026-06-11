@@ -212,27 +212,6 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Needs Attention */}
-        {!proposalsLoading && pendingActions.length > 0 && (
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Needs Attention</h2>
-            </div>
-            <ul className={styles.pendingList}>
-              {pendingActions.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/proposal/${p.id}`} className={styles.pendingRow}>
-                    <span className={styles.pendingTitle}>{p.title}</span>
-                    <span className={styles.pendingHint}>
-                      {PENDING_HINTS[p.status] ?? STATUS_LABELS[p.status]}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {/* My Responsibilities — tasks assigned to the current user, emphasis
             scaled by how soon the proposal date is. Distinct from the per-proposal
             activity feed. */}
@@ -266,6 +245,27 @@ export default function DashboardPage() {
                 ))}
               </ul>
             )}
+          </section>
+        )}
+
+        {/* Needs Attention */}
+        {!proposalsLoading && pendingActions.length > 0 && (
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Needs Attention</h2>
+            </div>
+            <ul className={styles.pendingList}>
+              {pendingActions.map((p) => (
+                <li key={p.id}>
+                  <Link to={`/proposal/${p.id}`} className={styles.pendingRow}>
+                    <span className={styles.pendingTitle}>{p.title}</span>
+                    <span className={styles.pendingHint}>
+                      {PENDING_HINTS[p.status] ?? STATUS_LABELS[p.status]}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -309,66 +309,66 @@ export default function DashboardPage() {
             </p>
           ) : (
             <>
-          {showNewForm && (
-            <form onSubmit={handleCreateProposal} className={styles.newForm}>
-              <input
-                className={styles.newInput}
-                placeholder="Proposal title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                autoFocus
-              />
-              {createError && <p className={styles.errorMsg}>{createError}</p>}
-              <div className={styles.newFormActions}>
-                <button
-                  className={styles.newBtn}
-                  type="submit"
-                  disabled={creating || !newTitle.trim()}
-                >
-                  {creating ? 'Creating…' : 'Create'}
-                </button>
-                <button className={styles.cancelBtn} type="button" onClick={cancelNewForm}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
+              {showNewForm && (
+                <form onSubmit={handleCreateProposal} className={styles.newForm}>
+                  <input
+                    className={styles.newInput}
+                    placeholder="Proposal title"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    autoFocus
+                  />
+                  {createError && <p className={styles.errorMsg}>{createError}</p>}
+                  <div className={styles.newFormActions}>
+                    <button
+                      className={styles.newBtn}
+                      type="submit"
+                      disabled={creating || !newTitle.trim()}
+                    >
+                      {creating ? 'Creating…' : 'Create'}
+                    </button>
+                    <button className={styles.cancelBtn} type="button" onClick={cancelNewForm}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
 
-          {proposalsLoading ? (
-            <p className={styles.muted}>Loading…</p>
-          ) : proposalsError ? (
-            <p className={styles.errorMsg}>{proposalsError}</p>
-          ) : visibleProposals.length === 0 ? (
-            <p className={styles.emptyState}>
-              {showArchived
-                ? 'No archived proposals.'
-                : proposals.length === 0
-                  ? 'Create your first date idea.'
-                  : 'No active proposals.'}
-            </p>
-          ) : (
-            <ul className={styles.proposalList}>
-              {visibleProposals.map((p) => {
-                // Completion is derived from the date (day after the event), so
-                // show it even though the stored status is still e.g. confirmed.
-                const status =
-                  isProposalComplete(p) && p.status !== 'declined' ? 'completed' : p.status
-                return (
-                  <li key={p.id}>
-                    <Link to={`/proposal/${p.id}`} className={styles.proposalRow}>
-                      <span className={styles.proposalTitle}>{p.title}</span>
-                      <span className={styles.proposalMeta}>
-                        <span className={`${styles.statusBadge} ${styles[`status_${status}`]}`}>
-                          {STATUS_LABELS[status] ?? status}
-                        </span>
-                        <span className={styles.proposalDate}>{formatDate(p.updatedAt)}</span>
-                      </span>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+              {proposalsLoading ? (
+                <p className={styles.muted}>Loading…</p>
+              ) : proposalsError ? (
+                <p className={styles.errorMsg}>{proposalsError}</p>
+              ) : visibleProposals.length === 0 ? (
+                <p className={styles.emptyState}>
+                  {showArchived
+                    ? 'No archived proposals.'
+                    : proposals.length === 0
+                      ? 'Create your first date idea.'
+                      : 'No active proposals.'}
+                </p>
+              ) : (
+                <ul className={styles.proposalList}>
+                  {visibleProposals.map((p) => {
+                    // Completion is derived from the date (day after the event), so
+                    // show it even though the stored status is still e.g. confirmed.
+                    const status =
+                      isProposalComplete(p) && p.status !== 'declined' ? 'completed' : p.status
+                    return (
+                      <li key={p.id}>
+                        <Link to={`/proposal/${p.id}`} className={styles.proposalRow}>
+                          <span className={styles.proposalTitle}>{p.title}</span>
+                          <span className={styles.proposalMeta}>
+                            <span className={`${styles.statusBadge} ${styles[`status_${status}`]}`}>
+                              {STATUS_LABELS[status] ?? status}
+                            </span>
+                            <span className={styles.proposalDate}>{formatDate(p.updatedAt)}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </>
           )}
         </section>
