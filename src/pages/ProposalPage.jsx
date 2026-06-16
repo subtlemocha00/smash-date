@@ -42,6 +42,7 @@ import { logActivity, subscribeToActivity } from '../services/firebase/activityE
 import { subscribeToGroup } from '../services/firebase/groups'
 import { todayDateString, isPastDate } from '../utils/dates'
 import { resolveMemberName } from '../utils/memberNames'
+import { exportResponsibilities } from '../services/export/responsibilityExport'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -687,6 +688,10 @@ export default function ProposalPage() {
         }
       }
     })
+  }
+
+  async function handleExportResponsibilities() {
+    await exportResponsibilities(proposal, responsibilities, members)
   }
 
   // Voting handlers read the latest options straight from proposal state (kept
@@ -1588,6 +1593,20 @@ export default function ProposalPage() {
             <span className={styles.manageHint}>
               Reuse this plan for a new date — details, responsibilities, and
               voting options carry over.
+            </span>
+          </div>
+
+          <div className={styles.manageRow}>
+            <button
+              className={styles.manageBtn}
+              onClick={handleExportResponsibilities}
+              type="button"
+            >
+              Export responsibilities
+            </button>
+            <span className={styles.manageHint}>
+              Download a formatted .xlsx file with all responsibility assignments,
+              notes, and items.
             </span>
           </div>
 

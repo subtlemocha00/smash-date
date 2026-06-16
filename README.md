@@ -73,6 +73,9 @@ src/
       comments.js             # addComment, deleteComment, subscribeToComments
       responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
+    export/
+      xlsxBuilder.js          # low-level ExcelJS helpers (workbook creation, styled rows, download trigger)
+      responsibilityExport.js # responsibility export orchestration — builds workbook and triggers download
   styles/
     global.css      # Design tokens, light/dark themes, reset, .loading-screen utility
 ```
@@ -310,6 +313,8 @@ Rules live in `firestore.rules` and enforce:
 - Empty states and error states throughout (failed saves, failed status updates, failed comments, failed/denied Firestore reads).
 - Duplicate-submission guards on all create/update forms.
 - Firestore security rules covering every collection.
+
+- **Export Responsibilities:** any group member can download an `.xlsx` file from a proposal's Manage section ("Export responsibilities"). The workbook contains a single "Responsibilities" sheet with a proposal header block (title, date, status, exported date) followed by each responsibility as a labeled block: Responsibility, Assigned To, Completed (Yes/No), Notes (if present), and Items (if present). Responsibilities export in displayed order. Assignees use their group display name (group override → account name → snapshot fallback). All responsibilities are exported regardless of completion status. The export is entirely client-side (no server, no cloud storage). Built on [ExcelJS](https://github.com/exceljs/exceljs); export logic lives in `src/services/export/` as an extension point for future exports (proposal export, group export).
 
 ### Not Implemented (intentionally out of MVP scope)
 
