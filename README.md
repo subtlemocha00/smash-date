@@ -74,8 +74,10 @@ src/
       responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
     export/
-      xlsxBuilder.js          # low-level ExcelJS helpers (workbook creation, styled rows, download trigger)
-      responsibilityExport.js # responsibility export orchestration — builds workbook and triggers download
+      xlsxBuilder.js          # low-level ExcelJS helpers (workbook/sheet creation, styled rows, download trigger)
+      exportFormatters.js     # shared date/time/status formatting utilities
+      responsibilityExport.js # responsibility export — buildResponsibilitySheet() + standalone download
+      proposalExport.js       # full proposal export (two-sheet workbook) — reuses buildResponsibilitySheet()
   styles/
     global.css      # Design tokens, light/dark themes, reset, .loading-screen utility
 ```
@@ -314,7 +316,8 @@ Rules live in `firestore.rules` and enforce:
 - Duplicate-submission guards on all create/update forms.
 - Firestore security rules covering every collection.
 
-- **Export Responsibilities:** any group member can download an `.xlsx` file from a proposal's Manage section ("Export responsibilities"). The workbook contains a single "Responsibilities" sheet with a proposal header block (title, date, status, exported date) followed by each responsibility as a labeled block: Responsibility, Assigned To, Completed (Yes/No), Notes (if present), and Items (if present). Responsibilities export in displayed order. Assignees use their group display name (group override → account name → snapshot fallback). All responsibilities are exported regardless of completion status. The export is entirely client-side (no server, no cloud storage). Built on [ExcelJS](https://github.com/exceljs/exceljs); export logic lives in `src/services/export/` as an extension point for future exports (proposal export, group export).
+- **Export Proposal:** any group member can download a two-sheet `.xlsx` workbook from a proposal's Manage section ("Export proposal"). Sheet 1 ("Proposal") contains the proposal title, status, optional decision deadline, and all detail fields (description, date, time, activity, location, childcare notes, budget, notes) in a labeled-block planning-document layout. Sheet 2 ("Responsibilities") is identical to the standalone responsibilities export (see below). For finalized proposals (collaboration locked, confirmed, or completed) all fields export their resolved plain values. For active proposals with field-level voting, fields that have active voting export a bullet list of available options (no vote counts, no winner identification); fields without voting export their plain value.
+- **Export Responsibilities:** any group member can download a standalone `.xlsx` file from a proposal's Manage section ("Export responsibilities"). The workbook contains a single "Responsibilities" sheet with a proposal header block (title, date, status, exported date) followed by each responsibility as a labeled block: Responsibility, Assigned To, Completed (Yes/No), Notes (if present), and Items (if present). Responsibilities export in displayed order. Assignees use their group display name (group override → account name → snapshot fallback). All responsibilities are exported regardless of completion status. The export is entirely client-side (no server, no cloud storage). Built on [ExcelJS](https://github.com/exceljs/exceljs); export logic lives in `src/services/export/` as an extension point for future exports.
 
 ### Not Implemented (intentionally out of MVP scope)
 

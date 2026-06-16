@@ -47,17 +47,20 @@ export function writeDivider(worksheet, row) {
   r.commit()
 }
 
-// Creates a new workbook + worksheet ready for writing.
-export function createWorkbook(sheetName) {
+// Creates a bare workbook (no worksheets). Call addSheet to add sheets.
+export function createWorkbook() {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Smash Date'
   wb.created = new Date()
-  const ws = wb.addWorksheet(sheetName)
-  ws.columns = [
-    { width: 18 }, // label column
-    { width: 52 }  // value column
-  ]
-  return { workbook: wb, worksheet: ws }
+  return wb
+}
+
+// Adds a worksheet with the given name and column widths.
+// `columns` is an array of { width } objects; defaults to standard label/value widths.
+export function addSheet(workbook, name, columns = [{ width: 18 }, { width: 52 }]) {
+  const ws = workbook.addWorksheet(name)
+  ws.columns = columns
+  return ws
 }
 
 // Triggers a browser download of the workbook as a .xlsx file.

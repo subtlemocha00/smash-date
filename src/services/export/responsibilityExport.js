@@ -1,37 +1,12 @@
 import {
   createWorkbook,
+  addSheet,
   downloadWorkbook,
   writeHeading,
   writeRow,
   writeDivider
 } from './xlsxBuilder'
-
-// Formats a Firestore proposal date field (YYYY-MM-DD string) for display.
-function formatProposalDate(dateStr) {
-  if (!dateStr) return null
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const d = new Date(year, month - 1, day)
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
-// Formats today's date for the "Exported:" header field.
-function formatExportDate() {
-  return new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
-const STATUS_LABELS = {
-  draft: 'Draft',
-  proposed: 'Proposed',
-  changes_requested: 'Changes Requested',
-  accepted: 'Accepted',
-  confirmed: 'Confirmed',
-  completed: 'Completed',
-  declined: 'Declined'
-}
+import { formatProposalDate, formatExportDate, STATUS_LABELS } from './exportFormatters'
 
 // Resolves a responsibility assignee's display name. Uses the live group member
 // map (which already applies group override → account name → fallback) when the
@@ -44,15 +19,9 @@ function resolveAssigneeName(responsibility, members) {
   return 'Unassigned'
 }
 
-// Generates and downloads a responsibilities export for the given proposal.
-//
-// `proposal`         — the proposal document object
-// `responsibilities` — ordered array of responsibility documents
-// `members`          — uid → display name map (group-resolved, from ProposalPage state)
-// `statusLabels`     — optional override for status label map
-export async function exportResponsibilities(proposal, responsibilities, members) {
-  const { workbook, worksheet } = createWorkbook('Responsibilities')
-
+// Writes responsibility content into an existing worksheet. Called directly by
+// exportResponsibilities and reused by proposalExport when building sheet 2.
+export function buildResponsibilitySheet(worksheet, proposal, responsibilities, members) {
   let row = 1
 
   // ── Header block ──────────────────────────────────────────────────────────
@@ -98,6 +67,14 @@ export async function exportResponsibilities(proposal, responsibilities, members
       row++ // blank separator between responsibilities
     })
   }
+}
+
+// Generates and downloads a standalone responsibilities-only export.
+export async function exportResponsibilities(proposal, responsibilities, members) {
+  const workbook = createWorkbook()
+  const worksheet = addSheet(workbook, 'Responsibilities')
+
+  buildResponsibilitySheet(worksheet, proposal, responsibilities, members)
 
   const safeTitle = (proposal.title || 'responsibilities')
     .replace(/[^a-z0-9\s-]/gi, '')

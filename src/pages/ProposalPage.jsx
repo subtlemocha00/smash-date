@@ -43,6 +43,7 @@ import { subscribeToGroup } from '../services/firebase/groups'
 import { todayDateString, isPastDate } from '../utils/dates'
 import { resolveMemberName } from '../utils/memberNames'
 import { exportResponsibilities } from '../services/export/responsibilityExport'
+import { exportProposal } from '../services/export/proposalExport'
 import styles from './ProposalPage.module.css'
 
 const STATUS_LABELS = {
@@ -688,6 +689,10 @@ export default function ProposalPage() {
         }
       }
     })
+  }
+
+  async function handleExportProposal() {
+    await exportProposal(proposal, responsibilities, members)
   }
 
   async function handleExportResponsibilities() {
@@ -1593,6 +1598,20 @@ export default function ProposalPage() {
             <span className={styles.manageHint}>
               Reuse this plan for a new date — details, responsibilities, and
               voting options carry over.
+            </span>
+          </div>
+
+          <div className={styles.manageRow}>
+            <button
+              className={styles.manageBtn}
+              onClick={handleExportProposal}
+              type="button"
+            >
+              Export proposal
+            </button>
+            <span className={styles.manageHint}>
+              Download a two-sheet .xlsx workbook with proposal details and
+              responsibilities.
             </span>
           </div>
 
