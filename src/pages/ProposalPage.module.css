@@ -715,6 +715,38 @@
   overflow-wrap: anywhere;
 }
 
+/* Each item is an inline toggle: tap/click flips its completion state. Styled
+   to read as plain list text (no checkbox/button chrome) while staying a
+   comfortable tap target on mobile. */
+.detailsItemToggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  /* Avoid the iOS tap-highlight flash and accidental text selection during the
+     quick taps this control is built for. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.detailsItemToggle:disabled {
+  cursor: default;
+}
+
+.detailsItemDone {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
 .detailsEmpty {
   font-size: 13px;
   color: var(--fg-muted);

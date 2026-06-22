@@ -7,6 +7,7 @@ import {
   writeDivider
 } from './xlsxBuilder'
 import { formatProposalDate, formatExportDate, STATUS_LABELS } from './exportFormatters'
+import { normalizeDetailsList } from '../../utils/detailsList'
 
 // Resolves a responsibility assignee's display name. Uses the live group member
 // map (which already applies group override → account name → fallback) when the
@@ -56,11 +57,14 @@ export function buildResponsibilitySheet(worksheet, proposal, responsibilities, 
         writeRow(worksheet, row++, 'Notes:', note)
       }
 
-      const items = Array.isArray(r.detailsList) ? r.detailsList.filter(Boolean) : []
+      // Normalize so legacy string items and new { text, completed } items both
+      // export; completed items are marked so the checklist state carries over.
+      const items = normalizeDetailsList(r.detailsList).filter((it) => it.text.trim())
       if (items.length > 0) {
-        writeRow(worksheet, row++, 'Items:', `• ${items[0]}`)
+        const label = (it) => `• ${it.text}${it.completed ? ' (done)' : ''}`
+        writeRow(worksheet, row++, 'Items:', label(items[0]))
         for (let i = 1; i < items.length; i++) {
-          writeRow(worksheet, row++, '', `• ${items[i]}`)
+          writeRow(worksheet, row++, '', label(items[i]))
         }
       }
 

@@ -42,6 +42,7 @@ import { logActivity, subscribeToActivity } from '../services/firebase/activityE
 import { subscribeToGroup } from '../services/firebase/groups'
 import { todayDateString, isPastDate } from '../utils/dates'
 import { resolveMemberName } from '../utils/memberNames'
+import { normalizeDetailsList, formatResponsibilityText } from '../utils/detailsList'
 import { exportResponsibilities } from '../services/export/responsibilityExport'
 import { exportProposal } from '../services/export/proposalExport'
 import styles from './ProposalPage.module.css'
@@ -110,6 +111,48 @@ function PencilIcon() {
   )
 }
 
+// Two-rectangle "copy to clipboard" glyph. Inline SVG themed via currentColor,
+// matching PencilIcon's stroke style.
+function CopyIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
+// Checkmark shown briefly after a successful copy, in place of CopyIcon.
+function CheckIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
 // Six-dot grip glyph marking the drag handle on a reorderable list item.
 // Inline SVG, themed via currentColor — consistent with PencilIcon and the
 // app's no-icon-dependency approach.
@@ -135,8 +178,10 @@ function GripIcon() {
 
 // Compact editor for a responsibility's optional details list. Shared by the
 // create form and the inline edit form. `items` is the working array of
-// strings; `onChange` receives the next array. Empty items are kept here for
-// editing and filtered out by the caller on save.
+// { text, completed } objects; `onChange` receives the next array. Only the
+// text is editable here — each item's `completed` flag is preserved untouched
+// through edits, reorders, and adds (toggling happens inline in the read view).
+// Empty items are kept here for editing and filtered out by the caller on save.
 //
 // Items are reorderable by dragging the grip handle. Order is purely the array
 // position (no per-item order field) — reordering just emits a permuted array,
@@ -231,7 +276,7 @@ function DetailsListEditor({ items, onChange }) {
               onPointerUp={endDrag}
               onPointerCancel={endDrag}
               onKeyDown={handleKeyDown(i)}
-              aria-label={`Reorder "${item || 'item'}" (use arrow keys to move)`}
+              aria-label={`Reorder "${item.text || 'item'}" (use arrow keys to move)`}
               title="Drag to reorder"
             >
               <GripIcon />
@@ -239,11 +284,11 @@ function DetailsListEditor({ items, onChange }) {
           )}
           <input
             className={styles.detailsListInput}
-            value={item}
+            value={item.text}
             placeholder="e.g. sandals"
             onChange={(e) => {
               const next = items.slice()
-              next[i] = e.target.value
+              next[i] = { ...next[i], text: e.target.value }
               onChange(next)
             }}
           />
@@ -260,7 +305,7 @@ function DetailsListEditor({ items, onChange }) {
       <button
         type="button"
         className={styles.detailsAddItemBtn}
-        onClick={() => onChange([...items, ''])}
+        onClick={() => onChange([...items, { text: '', completed: false }])}
       >
         + Add item
       </button>
@@ -334,6 +379,10 @@ export default function ProposalPage() {
   const [editList, setEditList] = useState([])
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState('')
+
+  // Id of the responsibility whose "Copy" button just succeeded, used to show a
+  // brief checkmark confirmation. Cleared on a timer (see copyResponsibility).
+  const [copiedRespId, setCopiedRespId] = useState(null)
 
   const [activityCollapsed, setActivityCollapsed] = useState(true)
 
@@ -684,7 +733,12 @@ export default function ProposalPage() {
             assignedTo: r.assignedTo ?? null,
             assigneeName: r.assigneeName || '',
             detailsNote: r.detailsNote || '',
-            detailsList: Array.isArray(r.detailsList) ? r.detailsList : []
+            // Item completion resets on a copy — same "fresh work" reasoning as
+            // the responsibility-level completed flag above.
+            detailsList: normalizeDetailsList(r.detailsList).map((it) => ({
+              text: it.text,
+              completed: false
+            }))
           }))
         }
       }
@@ -775,7 +829,9 @@ export default function ProposalPage() {
     try {
       const assigneeName = respAssignee ? members[respAssignee] || respAssignee : ''
       const note = respNote.trim()
-      const list = respList.map((s) => s.trim()).filter(Boolean)
+      const list = respList
+        .map((it) => ({ text: it.text.trim(), completed: !!it.completed }))
+        .filter((it) => it.text)
       await addResponsibility(id, respTitle.trim(), respAssignee || null, assigneeName, note, list)
       await logActivity(
         id,
@@ -810,7 +866,7 @@ export default function ProposalPage() {
     setEditTitle(r.title || '')
     setEditAssignee(r.assignedTo || '')
     setEditNote(r.detailsNote || '')
-    setEditList([...(r.detailsList || [])])
+    setEditList(normalizeDetailsList(r.detailsList))
     setEditError('')
   }
 
@@ -832,7 +888,9 @@ export default function ProposalPage() {
       const newUid = editAssignee || null
       const newName = newUid ? members[newUid] || newUid : ''
       const note = editNote.trim()
-      const list = editList.map((s) => s.trim()).filter(Boolean)
+      const list = editList
+        .map((it) => ({ text: it.text.trim(), completed: !!it.completed }))
+        .filter((it) => it.text)
       await updateResponsibility(r.id, {
         title,
         assignedTo: newUid,
@@ -861,6 +919,42 @@ export default function ProposalPage() {
       setEditError('Failed to save changes. Please try again.')
     } finally {
       setSavingEdit(false)
+    }
+  }
+
+  // Inline toggle for a single item inside a responsibility's item list.
+  // `index` is the position in the stored array (the read view keeps indices
+  // aligned with normalized data). We normalize the whole list, flip the one
+  // item, and persist — legacy string items upgrade to objects on first toggle.
+  // The Firestore realtime listener repaints, so the change feels immediate and
+  // stays consistent under rapid repeated clicks (each write is from fresh data).
+  async function toggleDetailsItem(r, index) {
+    const list = normalizeDetailsList(r.detailsList)
+    if (index < 0 || index >= list.length) return
+    const next = list.map((it, i) =>
+      i === index ? { ...it, completed: !it.completed } : it
+    )
+    try {
+      await updateResponsibility(r.id, { detailsList: next })
+    } catch {
+      // Non-blocking: the listener keeps the prior state on-screen, so a failed
+      // toggle simply leaves the item as it was. No modal for a lightweight tap.
+    }
+  }
+
+  // Copies a single responsibility as formatted plain text. Pure client-side
+  // utility: no Firestore write, no navigation. On success we flag the row id so
+  // its button shows a brief checkmark; the flag clears itself after 1.5s.
+  async function copyResponsibility(r) {
+    try {
+      await navigator.clipboard.writeText(formatResponsibilityText(r))
+      setCopiedRespId(r.id)
+      setTimeout(() => {
+        setCopiedRespId((cur) => (cur === r.id ? null : cur))
+      }, 1500)
+    } catch {
+      // Clipboard may be unavailable (insecure context or denied permission).
+      // Stay silent — this is a convenience action, not a critical flow.
     }
   }
 
@@ -1274,8 +1368,12 @@ export default function ProposalPage() {
             <ul className={styles.respList}>
               {responsibilities.map((r) => {
                 const note = (r.detailsNote || '').trim()
-                const list = (r.detailsList || []).filter((s) => s && s.trim())
-                const hasDetails = note || list.length > 0
+                // Normalized to { text, completed } so legacy string items and
+                // new object items render the same. Indices line up with the
+                // stored array, so the inline toggle can persist by index.
+                const list = normalizeDetailsList(r.detailsList)
+                const hasItems = list.some((it) => it.text.trim())
+                const hasDetails = note || hasItems
                 const editingThis = editingRespId === r.id
                 const expanded = expandedResp.has(r.id)
                 // Details is a read-only view control: offer it whenever there's
@@ -1323,9 +1421,26 @@ export default function ProposalPage() {
                             'Unassigned'}
                         </span>
                       </div>
-                      {/* Right action rail: spans both rows, vertically centered. */}
-                      {((!editLocked && !editingThis) || !detailsLocked) && (
+                      {/* Right action rail: spans both rows, vertically centered.
+                          Copy is always available (read-only, ignores locks);
+                          Edit/Delete remain gated by lock + edit state. */}
+                      {(!editingThis || !detailsLocked) && (
                         <div className={styles.respActions}>
+                          {!editingThis && (
+                            <button
+                              type="button"
+                              className={styles.respEditBtn}
+                              onClick={() => copyResponsibility(r)}
+                              aria-label={
+                                copiedRespId === r.id
+                                  ? `Copied "${r.title}"`
+                                  : `Copy "${r.title}" as text`
+                              }
+                              title={copiedRespId === r.id ? 'Copied!' : 'Copy as text'}
+                            >
+                              {copiedRespId === r.id ? <CheckIcon /> : <CopyIcon />}
+                            </button>
+                          )}
                           {!editLocked && !editingThis && (
                             <button
                               type="button"
@@ -1411,13 +1526,31 @@ export default function ProposalPage() {
                             <p className={styles.detailsNote}>{note}</p>
                           </div>
                         )}
-                        {list.length > 0 && (
+                        {hasItems && (
                           <div className={styles.detailsSection}>
                             <span className={styles.detailsLabel}>Items</span>
                             <ul className={styles.detailsItems}>
-                              {list.map((item, i) => (
-                                <li key={i}>{item}</li>
-                              ))}
+                              {list.map((item, i) =>
+                                item.text.trim() ? (
+                                  <li key={i}>
+                                    {/* Tap/click toggles this item's completion
+                                        inline — reversible, no extra controls.
+                                        Locked alongside the parent toggle once
+                                        the plan is complete. */}
+                                    <button
+                                      type="button"
+                                      className={`${styles.detailsItemToggle} ${item.completed ? styles.detailsItemDone : ''
+                                        }`}
+                                      onClick={() => toggleDetailsItem(r, i)}
+                                      disabled={completed}
+                                      aria-pressed={item.completed}
+                                      title={completed ? undefined : 'Toggle complete'}
+                                    >
+                                      {item.text}
+                                    </button>
+                                  </li>
+                                ) : null
+                              )}
                             </ul>
                           </div>
                         )}
