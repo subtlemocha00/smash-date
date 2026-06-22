@@ -64,7 +64,7 @@ const FIELDS = [
   { key: 'date', label: 'Date', type: 'date', votable: true },
   { key: 'time', label: 'Time', type: 'time', votable: true },
   { key: 'activity', label: 'Activity', votable: true },
-  { key: 'location', label: 'Restaurant / Location', votable: true },
+  { key: 'location', label: 'Location', votable: true },
   { key: 'childcareNotes', label: 'Childcare Notes', votable: true },
   { key: 'budget', label: 'Budget', votable: true },
   { key: 'notes', label: 'Notes', multiline: true, votable: false }
