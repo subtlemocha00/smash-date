@@ -40,6 +40,12 @@ import {
 } from '../services/firebase/responsibilities'
 import { logActivity, subscribeToActivity } from '../services/firebase/activityEvents'
 import { subscribeToGroup } from '../services/firebase/groups'
+import {
+  sendProposalProposedEmail,
+  sendProposalReproposedEmail,
+  sendProposalLockedEmail,
+  sendChangesRequestedEmail
+} from '../services/email/proposalEmailService'
 import { todayDateString, isPastDate } from '../utils/dates'
 import { resolveMemberName } from '../utils/memberNames'
 import { normalizeDetailsList, formatResponsibilityText } from '../utils/detailsList'
@@ -324,6 +330,8 @@ export default function ProposalPage() {
   const [activity, setActivity] = useState([])
   const [members, setMembers] = useState({})
   const [memberIds, setMemberIds] = useState([])
+  // Full group doc (id, name, memberIds, name maps) — used for email content.
+  const [group, setGroup] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [listenerError, setListenerError] = useState('')
@@ -425,6 +433,7 @@ export default function ProposalPage() {
     if (!proposal?.groupId) return
     const unsub = subscribeToGroup(proposal.groupId, (group) => {
       if (!group) return
+      setGroup(group)
       const ids = group.memberIds ?? []
       setMemberIds(ids)
       // Names are denormalized on the group (we can't read other users' docs),
@@ -549,7 +558,11 @@ export default function ProposalPage() {
   function handlePropose() {
     runAction(
       'propose',
-      () => transitionProposal(id, 'proposed', { resetAcceptances: true }),
+      async () => {
+        await transitionProposal(id, 'proposed', { resetAcceptances: true })
+        // Notify other members (best-effort; never blocks the action).
+        sendProposalProposedEmail({ group, proposal, actorUid: user.uid, actorName })
+      },
       `${actorName} proposed this date`
     )
   }
@@ -582,7 +595,11 @@ export default function ProposalPage() {
   function handleRequestChanges() {
     runAction(
       'changes',
-      () => transitionProposal(id, 'changes_requested', { resetAcceptances: true }),
+      async () => {
+        await transitionProposal(id, 'changes_requested', { resetAcceptances: true })
+        // Notify other members (best-effort; never blocks the action).
+        sendChangesRequestedEmail({ group, proposal, actorUid: user.uid, actorName })
+      },
       `${actorName} requested changes`
     )
   }
@@ -598,7 +615,11 @@ export default function ProposalPage() {
   function handleRepropose() {
     runAction(
       'repropose',
-      () => transitionProposal(id, 'proposed', { resetAcceptances: true }),
+      async () => {
+        await transitionProposal(id, 'proposed', { resetAcceptances: true })
+        // Notify other members (best-effort; never blocks the action).
+        sendProposalReproposedEmail({ group, proposal, actorUid: user.uid, actorName })
+      },
       `${actorName} re-proposed this date`
     )
   }
@@ -650,7 +671,11 @@ export default function ProposalPage() {
 
   function handleLockNow() {
     runDeadlineAction(
-      () => lockProposal(id),
+      async () => {
+        await lockProposal(id)
+        // Notify other members (best-effort; never blocks the action).
+        sendProposalLockedEmail({ group, proposal, actorUid: user.uid, actorName })
+      },
       `${actorName} locked collaboration on this proposal`,
       'Failed to lock. Please try again.'
     )

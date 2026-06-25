@@ -73,6 +73,8 @@ src/
       comments.js             # addComment, deleteComment, subscribeToComments
       responsibilities.js     # addResponsibility, toggleResponsibility, updateResponsibility, deleteResponsibility, subscribeToResponsibilities
       activityEvents.js       # logActivity, subscribeToActivity
+    email/
+      proposalEmailService.js # builds + queues `mail` docs for proposal events (Trigger Email extension)
     export/
       xlsxBuilder.js          # low-level ExcelJS helpers (workbook/sheet creation, styled rows, download trigger)
       exportFormatters.js     # shared date/time/status formatting utilities
@@ -243,6 +245,34 @@ lock rules as other detail edits (available until the proposal is locked).
 
 Append-only audit log (no update rule; only the group owner may delete entries).
 
+### `mail/{docId}`
+
+Outbound email queue consumed by the **Firebase "Trigger Email from Firestore"**
+extension (connected to SendGrid). The app writes one document per recipient;
+the extension sends the email and stamps a `delivery` field on the doc.
+
+```js
+{
+  toUids: string[],            // recipient UIDs — extension resolves emails from
+                               //   its configured Users collection (`users`)
+  message: {
+    subject: string,
+    text: string,
+    html: string
+  },
+  // Extra metadata (ignored by the extension) used by the security rules:
+  groupId: string,             // group the notification concerns
+  proposalId: string,
+  createdBy: string,           // author uid (must equal the caller)
+  event: 'proposal_created' | 'proposal_proposed' | 'proposal_reproposed' | 'changes_requested' | 'proposal_locked',
+  createdAt: Timestamp
+}
+```
+
+Recipients are addressed by **UID** (`toUids`), not raw email: the Firestore
+rules forbid the browser from reading other members' emails, so the extension
+performs the lookup server-side. See **§8. Email Notifications**.
+
 ---
 
 ## 6. Proposal Status Machine
@@ -292,10 +322,89 @@ Rules live in `firestore.rules` and enforce:
 - **Comment deletion** is restricted to the comment's own author (the proposal creator and group owner may also remove comments as part of the proposal / group cascade delete).
 - **Decision Deadline / lock** (proposals): the `locked`, `lockedAt`, and `decisionDeadline` fields may only be changed by the proposal creator. While a proposal is locked (manual lock or a passed `decisionDeadline`, evaluated against `request.time`), it is read-only to everyone but the creator — except for a member's own personal archive/dismiss write. Comment creation is blocked while the parent proposal is locked.
 - **Activity events** are append-only; only the group owner may delete them.
+- **Mail queue** (`mail/{docId}`): read/update/delete are fully closed (clients never inspect or tamper with the queue). A create is allowed only when the author is the caller (`createdBy == request.auth.uid`), the caller is a member of the referenced `groupId`, and every recipient in `toUids` is also a member of that group. This prevents the collection from being used as an open relay to email arbitrary users.
 
 ---
 
-## 8. Features
+## 8. Email Notifications
+
+Email notifications are delivered entirely through the **Firebase "Trigger Email
+from Firestore"** extension (connected to **SendGrid**) — there is **no backend,
+no Cloud Functions, and no second email provider**. To send an email the app
+simply writes a document to the `mail` collection (see §5); the extension does
+the rest.
+
+### Events that send email
+
+| Event | Triggered by | Subject |
+| --- | --- | --- |
+| **Proposal created** | Creating a proposal (new or copied), after it's written | `New Proposal Created: {title}` |
+| **Proposed** | A member clicking **Propose** (draft → proposed), after it succeeds | `Date Proposed: {title}` |
+| **Re-proposed** | A member clicking **Re-propose** (→ proposed), after it succeeds | `Date Re-proposed: {title}` |
+| **Changes requested** | A member selecting **Request changes**, after the transition succeeds | `Changes Requested: {title}` |
+| **Collaboration locked** | The creator clicking **Lock collaboration now**, after the lock succeeds | `Proposal Locked: {title}` |
+
+No other events send email. (The **Reopen collaboration** action, which also returns a proposal to `proposed`, does not send email.)
+
+The **locked** email additionally includes the proposal's **planning details**
+(description, date, time, activity, location, childcare notes, budget, notes —
+empty fields omitted). It deliberately does **not** include responsibilities,
+comments, or the activity feed.
+
+In the **created** and **changes-requested** emails, the words **"Smash Date"**
+are a hyperlink to that proposal (`/proposal/{id}`). Because the route is
+auth-guarded, a recipient who is already signed in lands on the proposal; one who
+isn't is redirected to the login page. The link's origin is read from
+`window.location.origin` at send time (callers may override via `baseUrl`); the
+plain-text body also includes the raw URL for non-HTML mail clients.
+
+### Recipients & exclusion
+
+Recipients are **all active members of the proposal's group except the user who
+triggered the event** — e.g. when Kev creates a proposal, Sarah, Ted, and Jenny
+are emailed but Kev is not. Removed members are absent from `memberIds`, so
+they're never included. Each email's actor name uses the same group-aware
+display-name logic as the rest of the app (`resolveMemberName`: group override →
+account name → email-prefix fallback).
+
+### How recipients are addressed (important)
+
+Members are addressed by **UID** via the extension's `toUids` field — not by raw
+email address. The Firestore rules deliberately forbid the browser from reading
+other members' `users/{uid}` documents, so the client cannot build an email-
+address list itself. The extension resolves each UID's email **server-side** from
+its configured Users collection, which also keeps members' addresses private from
+one another.
+
+> **Required extension configuration:** the Trigger Email extension must have its
+> **"Users collection"** parameter set to **`users`** (the app's existing user
+> docs, keyed by uid, each with an `email` field). Without this, `toUids` cannot
+> be resolved and **no mail is sent**. The default From address and SendGrid
+> credentials are configured in the extension itself — the app never sets them.
+
+### Architecture
+
+All email logic is centralized in
+[`src/services/email/proposalEmailService.js`](src/services/email/proposalEmailService.js):
+
+- `buildRecipientUids(group, actorUid)` — members minus the actor.
+- `buildProposalEmailContent(event, …)` — subject + text/HTML bodies (pure).
+- `buildProposalMailDocuments(event, …)` — the array of `mail` docs (pure; one per recipient).
+- `sendProposalCreatedEmail` / `sendProposalProposedEmail` / `sendProposalReproposedEmail` / `sendChangesRequestedEmail` / `sendProposalLockedEmail` — write the docs.
+
+The pure builders are unit-tested in `proposalEmailService.test.js`. New email
+types can reuse the same builders/writer.
+
+### Failure handling
+
+Email is strictly **best-effort and non-blocking**: the send is fired after the
+proposal action has already succeeded, and `sendProposalEventEmail` catches and
+logs any error rather than throwing. A failure to queue mail never prevents (or
+rolls back) proposal creation, locking, or requesting changes.
+
+---
+
+## 9. Features
 
 ### Implemented
 
@@ -321,14 +430,14 @@ Rules live in `firestore.rules` and enforce:
 
 ### Not Implemented (intentionally out of MVP scope)
 
-- Notifications (in-app or push) — proposal events surface in each proposal's activity feed instead.
+- In-app and push notifications — proposal events surface in each proposal's activity feed; **email** notifications are sent for proposal creation, collaboration locking, and change requests (see §8), but there is no in-app notification center or push delivery.
 - Calendar / external integrations, analytics, AI features.
 - Per-proposal delete UI (proposals are removed only when their group is deleted).
 - Display-name editing.
 
 ---
 
-## 9. Known Limitations
+## 10. Known Limitations
 
 - **Member names:** other members appear by name only after they've opened the app at least once (which records their `memberNames` entry); until then `GroupManager` shows a short `User xxxxxx` fallback.
 - **Group deletion** runs as a single Firestore batch (capped at 500 writes), which assumes a group's total document count stays modest. True at the app's intended scale.
@@ -337,7 +446,7 @@ Rules live in `firestore.rules` and enforce:
 
 ---
 
-## 10. Next Development Priorities
+## 11. Next Development Priorities
 
 1. Display-name editing in Settings.
 2. Per-proposal delete UI.

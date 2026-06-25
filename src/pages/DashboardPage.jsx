@@ -14,6 +14,7 @@ import {
   isDismissedForUser
 } from '../services/firebase/proposals'
 import { logActivity } from '../services/firebase/activityEvents'
+import { sendProposalCreatedEmail } from '../services/email/proposalEmailService'
 import {
   subscribeToResponsibilitiesForProposals,
   addResponsibilitiesForCopy
@@ -190,6 +191,7 @@ export default function DashboardPage() {
     setCreateError('')
     try {
       let proposalId
+      const proposalDate = copyDraft ? copyDate : ''
       if (copyDraft) {
         proposalId = await createProposalFromCopy(copyDraft.groupId, user.uid, {
           ...copyDraft.fields,
@@ -213,6 +215,13 @@ export default function DashboardPage() {
         'proposal_created',
         `${selfName} created this proposal`
       )
+      // Notify the other group members (best-effort; never blocks creation).
+      sendProposalCreatedEmail({
+        group: activeGroup,
+        proposal: { id: proposalId, title: newTitle.trim(), date: proposalDate },
+        actorUid: user.uid,
+        actorName: selfName
+      })
       navigate(`/proposal/${proposalId}`)
     } catch {
       setCreateError('Failed to create proposal. Please try again.')
